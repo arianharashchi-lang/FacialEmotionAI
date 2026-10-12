@@ -1,0 +1,60 @@
+{
+    "classes": [
+        "neutral",
+        "sad"
+    ],
+    "persons": [
+        "p01",
+        "p02"
+    ],
+    "folds": [
+        {
+            "validation_person": "p01",
+            "train_persons": [
+                "p02"
+            ],
+            "accuracy": 0.775,
+            "macro_f1": 0.7714285714285715,
+            "neutral_f1": 0.7428571428571429,
+            "sad_f1": 0.8,
+            "best_epoch": 25,
+            "confusion_matrix": [
+                [
+                    13,
+                    7
+                ],
+                [
+                    2,
+                    18
+                ]
+            ]
+        },
+        {
+            "validation_person": "p02",
+            "train_persons": [
+                "p01"
+            ],
+            "accuracy": 0.5,
+            "macro_f1": 0.3730407523510972,
+            "neutral_f1": 0.6551724137931034,
+            "sad_f1": 0.09090909090909091,
+            "best_epoch": 6,
+            "confusion_matrix": [
+                [
+                    19,
+                    1
+                ],
+                [
+                    19,
+                    1
+                ]
+            ]
+        }
+    ],
+    "mean_accuracy": 0.6375,
+    "mean_macro_f1": 0.5722346618898343,
+    "mean_neutral_f1": 0.6990147783251232,
+    "mean_sad_f1": 0.4454545454545455,
+    "final_training_epochs": 16,
+    "important_note": "This adapter is trained only on neutral and sad webcam features. Fear is excluded. Strong V1 model weights are not modified."
+}

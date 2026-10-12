@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local database / runtime captures
+database/*.db
+data/captured_faces/
+logs/
+
+# Raw and generated datasets
+data/ravdess_downloads/
+data/ravdess_temp/
+data/ravdess_sequences/
+data/ravdess_sequences_v2/
+data/raw_emotion_dataset/
+data/emotion_rgb/
+data/cnn_actor_split/
+data/lstm_features/
+data/webcam_adaptation/
+data/webcam_features/
+data/fake_dataset/
+
+# Experimental training artifacts
+models/lstm_attention_v2*.keras
+models/lstm_attention_v3*.keras
+models/lstm_attention_v4*.keras
+
+# Temporary files
+*.tmp
+*.part
+models/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_160_no_top.h5
