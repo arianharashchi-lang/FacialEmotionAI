@@ -47,28 +47,6 @@ DISCRIMINATOR_MODEL_PATH = os.path.join(
     "fake_discriminator.keras"
 )
 
-GENERATOR_MODEL_PATH = os.path.join(
-    MODEL_FOLDER,
-    "fake_generator.keras"
-)
-
-print(
-    "[DEBUG] Model path:",
-    DISCRIMINATOR_MODEL_PATH
-)
-
-print(
-    "[DEBUG] Model exists:",
-    os.path.exists(
-        DISCRIMINATOR_MODEL_PATH
-    )
-)
-
-GENERATOR_MODEL_PATH = os.path.join(
-    MODEL_FOLDER,
-    "fake_generator.keras"
-)
-
 
 # ============================================================
 # CREATE MODEL DIRECTORY
