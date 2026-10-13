@@ -42,3 +42,19 @@ models/lstm_attention_v4*.keras
 *.tmp
 *.part
 models/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_160_no_top.h5
+# ============================================================
+# Model files - keep only final runtime models on GitHub
+# ============================================================
+
+models/*
+
+!models/cnn_feature_extractor.keras
+!models/fake_discriminator.keras
+
+!models/lstm_attention_v1_best.keras
+!models/lstm_attention_v1_classes.json
+!models/lstm_v1_feature_mean.npy
+!models/lstm_v1_feature_std.npy
+
+!models/sad_neutral_adapter.keras
+!models/sad_neutral_adapter_classes.json
