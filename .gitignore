@@ -15,46 +15,37 @@ env/
 .DS_Store
 Thumbs.db
 
-# Local database / runtime captures
-database/*.db
-data/captured_faces/
+# Environment / credentials
+.env
+.env.*
+*.pem
+*.key
+
+# Local data and privacy-sensitive runtime artifacts
+data/
+database/
 logs/
+*.db
+*.sqlite
+*.sqlite3
 
-# Raw and generated datasets
-data/ravdess_downloads/
-data/ravdess_temp/
-data/ravdess_sequences/
-data/ravdess_sequences_v2/
-data/raw_emotion_dataset/
-data/emotion_rgb/
-data/cnn_actor_split/
-data/lstm_features/
-data/webcam_adaptation/
-data/webcam_features/
-data/fake_dataset/
-
-# Experimental training artifacts
-models/lstm_attention_v2*.keras
-models/lstm_attention_v3*.keras
-models/lstm_attention_v4*.keras
-
-# Temporary files
-*.tmp
+# Raw datasets / archives / media
+*.zip
 *.part
+*.tmp
+*.mp4
+*.avi
+
+# Local pretrained MobileNet weights used only for training fallback
 models/mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_160_no_top.h5
-# ============================================================
-# Model files - keep only final runtime models on GitHub
-# ============================================================
 
+# Keep only final runtime model artifacts in Git
 models/*
-
 !models/cnn_feature_extractor.keras
 !models/fake_discriminator.keras
-
 !models/lstm_attention_v1_best.keras
 !models/lstm_attention_v1_classes.json
 !models/lstm_v1_feature_mean.npy
 !models/lstm_v1_feature_std.npy
-
 !models/sad_neutral_adapter.keras
 !models/sad_neutral_adapter_classes.json
