@@ -52,7 +52,8 @@ MODEL_DIR = os.path.join(
 
 RESULT_DIR = os.path.join(
     BASE_DIR,
-    "results"
+    "results",
+    "cnn"
 )
 
 os.makedirs(
@@ -436,176 +437,76 @@ augmentation = tf.keras.Sequential(
 def build_model():
 
     print("")
-    print(
-        "[INFO] Loading MobileNetV2 ImageNet..."
-    )
-
+    print("[INFO] Building MobileNetV2 emotion CNN...")
 
     inputs = tf.keras.Input(
-
-        shape=(
-            IMAGE_SIZE,
-            IMAGE_SIZE,
-            3
-        ),
-
-        name="rgb_face"
-
-    )
-
-
-    # --------------------------------------------------------
-    # Data Augmentation
-    # --------------------------------------------------------
-
-    x = augmentation(
-        inputs
-    )
-
-
-    # --------------------------------------------------------
-    # MobileNet preprocessing
-    # --------------------------------------------------------
-
-    x = (
-        tf.keras.applications
-        .mobilenet_v2
-        .preprocess_input(x)
-    )
-
-
-    # --------------------------------------------------------
-    # Pretrained CNN
-    # --------------------------------------------------------
-def build_model():
-
-    print("")
-    print(
-        "[INFO] Loading MobileNetV2 ImageNet..."
-    )
-
-    # ========================================================
-    # INPUT
-    # ========================================================
-
-    inputs = tf.keras.Input(
-        shape=(
-            IMAGE_SIZE,
-            IMAGE_SIZE,
-            3
-        ),
+        shape=(IMAGE_SIZE, IMAGE_SIZE, 3),
         name="rgb_face"
     )
 
-    # ========================================================
-    # DATA AUGMENTATION
-    # ========================================================
-
-    x = augmentation(
-        inputs
-    )
-
-    # ========================================================
-    # MOBILENET PREPROCESSING
-    # ========================================================
+    x = augmentation(inputs)
 
     x = tf.keras.applications.mobilenet_v2.preprocess_input(
         x
     )
 
-    # ========================================================
-    # LOCAL PRETRAINED WEIGHTS
-    # ========================================================
-
-    WEIGHTS_PATH = os.path.join(
+    weights_path = os.path.join(
         MODEL_DIR,
         "mobilenet_v2_weights_tf_dim_ordering_tf_kernels_1.0_160_no_top.h5"
     )
 
-    if not os.path.isfile(
-        WEIGHTS_PATH
-    ):
+    if os.path.isfile(weights_path):
 
-        raise FileNotFoundError(
-            f"MobileNetV2 weights not found:\n"
-            f"{WEIGHTS_PATH}"
+        print("[INFO] Using local MobileNetV2 ImageNet weights.")
+
+        base_model = tf.keras.applications.MobileNetV2(
+            input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3),
+            include_top=False,
+            weights=None
         )
 
-    print(
-        "[INFO] Loading MobileNetV2 architecture..."
-    )
+        base_model.load_weights(weights_path)
 
-    # ========================================================
-    # CREATE MOBILENETV2
-    # ========================================================
+    else:
 
-    base_model = tf.keras.applications.MobileNetV2(
-        input_shape=(
-            IMAGE_SIZE,
-            IMAGE_SIZE,
-            3
-        ),
-        include_top=False,
-        weights=None
-    )
+        print(
+            "[INFO] Local weights not found; "
+            "using Keras ImageNet weights."
+        )
 
-    print(
-        "[INFO] Loading local ImageNet weights..."
-    )
-
-    base_model.load_weights(
-        WEIGHTS_PATH
-    )
-
-    print(
-        "[SUCCESS] MobileNetV2 ImageNet weights "
-        "loaded locally."
-    )
-
-    # ========================================================
-    # PHASE 1:
-    # FREEZE PRETRAINED CNN
-    # ========================================================
+        try:
+            base_model = tf.keras.applications.MobileNetV2(
+                input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3),
+                include_top=False,
+                weights="imagenet"
+            )
+        except Exception as error:
+            raise RuntimeError(
+                "Could not load MobileNetV2 ImageNet weights. "
+                "Either allow Keras to download them or place the "
+                "160x160 no-top MobileNetV2 weights file in models/. "
+                f"Original error: {error}"
+            ) from error
 
     base_model.trainable = False
-
-    # ========================================================
-    # CNN FEATURE EXTRACTION
-    # ========================================================
 
     x = base_model(
         x,
         training=False
     )
 
-    # ========================================================
-    # FEATURE POOLING
-    # ========================================================
-
     x = tf.keras.layers.GlobalAveragePooling2D(
         name="global_features"
     )(x)
-
-    # ========================================================
-    # REGULARIZATION
-    # ========================================================
 
     x = tf.keras.layers.Dropout(
         0.30
     )(x)
 
-    # ========================================================
-    # 256-D FEATURE VECTOR
-    # ========================================================
-
     features = tf.keras.layers.Dense(
         256,
         activation="relu",
-        kernel_regularizer=(
-            tf.keras.regularizers.l2(
-                1e-4
-            )
-        ),
+        kernel_regularizer=tf.keras.regularizers.l2(1e-4),
         name="feature_embedding"
     )(x)
 
@@ -617,19 +518,11 @@ def build_model():
         0.40
     )(features)
 
-    # ========================================================
-    # 7 EMOTION CLASSIFICATION
-    # ========================================================
-
     outputs = tf.keras.layers.Dense(
         NUM_CLASSES,
         activation="softmax",
         name="emotion_output"
     )(features)
-
-    # ========================================================
-    # FINAL MODEL
-    # ========================================================
 
     model = tf.keras.Model(
         inputs=inputs,
@@ -637,102 +530,7 @@ def build_model():
         name="Emotion_MobileNetV2"
     )
 
-    return (
-        model,
-        base_model
-    )
-
-    # Phase 1:
-    # Freeze entire pretrained CNN
-    base_model.trainable = False
-    
-    
-    x = base_model(
-        x,
-        training=False
-    )
-    
-
-    # --------------------------------------------------------
-    # Feature pooling
-    # --------------------------------------------------------
-
-    x = tf.keras.layers.GlobalAveragePooling2D(
-        name="global_features"
-    )(x)
-
-
-    # --------------------------------------------------------
-    # Regularization
-    # --------------------------------------------------------
-
-    x = tf.keras.layers.Dropout(
-        0.30
-    )(x)
-
-
-    # --------------------------------------------------------
-    # 256-D feature vector
-    # --------------------------------------------------------
-
-    features = tf.keras.layers.Dense(
-
-        256,
-
-        activation="relu",
-
-        kernel_regularizer=(
-            tf.keras.regularizers.l2(
-                1e-4
-            )
-        ),
-
-        name="feature_embedding"
-
-    )(x)
-
-
-    features = (
-        tf.keras.layers.BatchNormalization()
-        (features)
-    )
-
-
-    features = tf.keras.layers.Dropout(
-        0.40
-    )(features)
-
-
-    # --------------------------------------------------------
-    # Emotion classifier
-    # --------------------------------------------------------
-
-    outputs = tf.keras.layers.Dense(
-
-        NUM_CLASSES,
-
-        activation="softmax",
-
-        name="emotion_output"
-
-    )(features)
-
-
-    model = tf.keras.Model(
-
-        inputs=inputs,
-
-        outputs=outputs,
-
-        name="Emotion_MobileNetV2"
-
-    )
-
-
-    return (
-        model,
-        base_model
-    )
+    return model, base_model
 
 
 # ============================================================
