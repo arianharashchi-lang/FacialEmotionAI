@@ -63,7 +63,8 @@ MODEL_DIR = os.path.join(
 
 RESULT_DIR = os.path.join(
     BASE_DIR,
-    "results"
+    "results",
+    "lstm_v1"
 )
 
 os.makedirs(

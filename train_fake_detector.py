@@ -59,7 +59,7 @@ REAL_FOLDER = os.path.join(
 
 MODEL_FOLDER = "models"
 
-RESULTS_FOLDER = "results"
+RESULTS_FOLDER = os.path.join("results", "anti_spoofing")
 
 BEST_MODEL_PATH = os.path.join(
     MODEL_FOLDER,
