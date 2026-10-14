@@ -229,3 +229,51 @@ def apply_adapter_if_confident(
         group_mass,
         adapter_top,
     )
+
+
+def temperature_scale_probs(
+    probabilities: Sequence[float],
+    temperature: float,
+) -> np.ndarray:
+    """Apply temperature scaling to a probability vector.
+
+    Temperature > 1 softens confidence, while temperature < 1 sharpens it.
+    """
+    if temperature <= 0:
+        raise ValueError(
+            "temperature must be greater than zero"
+        )
+
+    probabilities = normalize_probs(
+        probabilities
+    )
+
+    log_probs = np.log(
+        np.clip(
+            probabilities,
+            1e-7,
+            1.0,
+        )
+    )
+
+    scaled_logits = (
+        log_probs
+        / float(
+            temperature
+        )
+    )
+
+    scaled_logits = (
+        scaled_logits
+        - np.max(
+            scaled_logits
+        )
+    )
+
+    exp_values = np.exp(
+        scaled_logits
+    )
+
+    return normalize_probs(
+        exp_values
+    )
