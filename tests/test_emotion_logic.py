@@ -6,6 +6,7 @@ from emotion_logic import (
     normalize_probs,
     reliability,
     top_stats,
+    temperature_scale_probs,
 )
 
 
@@ -264,3 +265,48 @@ def test_reliability_boundaries_match_runtime_policy():
         0.80,
         0.07,
     ) == "LOW"
+
+
+
+def test_temperature_scaling_preserves_normalization():
+    result = temperature_scale_probs(
+        [0.80, 0.20],
+        2.0,
+    )
+
+    assert np.isclose(
+        result.sum(),
+        1.0,
+    )
+    assert result[0] < 0.80
+    assert result[0] > 0.50
+
+
+def test_temperature_one_is_identity():
+    original = np.asarray(
+        [0.70, 0.30],
+        dtype=np.float32,
+    )
+
+    result = temperature_scale_probs(
+        original,
+        1.0,
+    )
+
+    np.testing.assert_allclose(
+        result,
+        original,
+        atol=1e-6,
+    )
+
+
+def test_temperature_scaling_rejects_non_positive_temperature():
+    import pytest
+
+    with pytest.raises(
+        ValueError
+    ):
+        temperature_scale_probs(
+            [0.70, 0.30],
+            0.0,
+        )
