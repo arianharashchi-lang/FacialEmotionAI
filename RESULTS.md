@@ -70,7 +70,7 @@ See:
 - [results/anti_spoofing/fake_detector_metrics.json](results/anti_spoofing/fake_detector_metrics.json)
 - [results/anti_spoofing/fake_detector_confusion_matrix.png](results/anti_spoofing/fake_detector_confusion_matrix.png)
 
-## Final five-class deployment
+## Final five-class deployment benchmark
 
 The live system merges:
 - Fear into Surprise
@@ -78,4 +78,55 @@ The live system merges:
 
 and optionally refines Sad/Neutral using the confidence-gated adapter.
 
-The reported CNN/LSTM test metrics above are the original **7-class actor-wise evaluation**. A separate held-out benchmark of the final fused five-class deployment has not yet been performed, so this repository does not claim a new five-class test accuracy.
+The final five-class logic was benchmarked on the existing actor-wise RAVDESS test split (**Actors 21–24, 416 sequences**). Ground-truth labels were fused using the same deployment mapping.
+
+### Summary
+
+| Evaluation mode | Accuracy | Macro F1 | Weighted F1 |
+|---|---:|---:|---:|
+| **Fusion only** | **52.64%** | **54.73%** | **52.70%** |
+| Adapter assisted | 46.39% | 45.45% | 46.74% |
+
+The adapter activated on **101 / 416 sequences (24.3%)**.
+
+### Fusion-only per-class results
+
+| Final class | Precision | Recall | F1 | Support |
+|---|---:|---:|---:|---:|
+| Angry | 0.37 | 0.88 | 0.52 | 64 |
+| Happy | 0.95 | 0.62 | 0.75 | 64 |
+| Surprise | 0.60 | 0.38 | 0.46 | 128 |
+| Sad | 0.69 | 0.38 | 0.48 | 128 |
+| Neutral | 0.37 | 0.84 | 0.51 | 32 |
+
+![Final five-class fusion-only confusion matrix](results/final_5class/fusion_only_confusion_matrix.png)
+
+Raw report: [results/final_5class/fusion_only_report.txt](results/final_5class/fusion_only_report.txt)
+
+### Adapter-assisted per-class results
+
+| Final class | Precision | Recall | F1 | Support |
+|---|---:|---:|---:|---:|
+| Angry | 0.37 | 0.88 | 0.52 | 64 |
+| Happy | 0.95 | 0.62 | 0.75 | 64 |
+| Surprise | 0.59 | 0.38 | 0.46 | 128 |
+| Sad | 0.45 | 0.34 | 0.39 | 128 |
+| Neutral | 0.13 | 0.19 | 0.15 | 32 |
+
+![Final five-class adapter-assisted confusion matrix](results/final_5class/adapter_assisted_confusion_matrix.png)
+
+Raw report: [results/final_5class/adapter_assisted_report.txt](results/final_5class/adapter_assisted_report.txt)
+
+Full machine-readable metrics: [results/final_5class/final_5class_metrics.json](results/final_5class/final_5class_metrics.json)
+
+### Interpretation
+
+On this RAVDESS split, **fusion only outperformed adapter-assisted inference**. This is consistent with the adapter being trained on a very small, private two-participant webcam dataset and then evaluated here across a different domain.
+
+This result should **not** be interpreted as evidence that the adapter is universally harmful. Its intended use is webcam adaptation, and its two-person dataset is too small for population-level conclusions.
+
+The five-class scores also should not be treated as a direct apples-to-apples model improvement over the original seven-class metrics, because merging classes changes the prediction task and makes some previously distinct errors count as correct.
+
+### Evaluation caveat
+
+Actors 21–24 were unseen during model training, but this is **not a pristine post-selection benchmark**: the same actor-wise test split was used during earlier temporal-model comparison. A stronger future result would use a new external or otherwise untouched evaluation set.
