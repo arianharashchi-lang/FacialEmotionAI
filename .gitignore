@@ -49,3 +49,4 @@ models/*
 !models/lstm_v1_feature_std.npy
 !models/sad_neutral_adapter.keras
 !models/sad_neutral_adapter_classes.json
+!models/sad_neutral_adapter_calibration.json
