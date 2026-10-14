@@ -86,30 +86,47 @@ models/lstm_attention_v1_best.keras
 
 V2/V3/V4 are retained as research experiments, not runtime dependencies.
 
-## 6. Optional webcam adaptation
+## 6. Sad / Neutral webcam adaptation
 
-Private adaptation media is not committed.
+Private participant media is not committed.
 
-Collection:
+The released adapter originally used two participants. For the expanded workflow, collect additional **consented, pseudonymous participants** and keep person identities separated. A minimum of four participants is enforced by the new trainer; **six participants (p01–p06) with at least 20 Neutral and 20 Sad sequences per person are recommended** for the next benchmark.
+
+Example collection for four new participants:
 
 ```powershell
-python collect_webcam_emotions.py --person p01
-python collect_webcam_emotions.py --person p02
+python collect_webcam_emotions.py --person p03 --target-per-class 20
+python collect_webcam_emotions.py --person p04 --target-per-class 20
+python collect_webcam_emotions.py --person p05 --target-per-class 20
+python collect_webcam_emotions.py --person p06 --target-per-class 20
 ```
 
-Feature extraction:
+The final adapter is binary, so this collector now records only **Neutral** and **Sad**.
+
+Feature extraction automatically discovers every participant folder:
 
 ```powershell
 python extract_webcam_features.py
 ```
 
-Final binary adapter:
+Retrain with leave-one-person-out cross-validation:
 
 ```powershell
-python train_sad_neutral_adapter.py
+python train_sad_neutral_adapter.py --min-persons 4 --min-sequences-per-class 20
 ```
 
-Do not publish participant face data without explicit consent.
+The trainer now:
+- evaluates every participant as an unseen validation person once;
+- aggregates out-of-fold predictions across participants;
+- fits temperature scaling from out-of-fold probabilities;
+- reports calibration error before and after scaling;
+- selects a confidence threshold from out-of-fold predictions;
+- saves the chosen temperature and threshold to `models/sad_neutral_adapter_calibration.json`;
+- trains the final adapter on all eligible participants only after evaluation/calibration is complete.
+
+At runtime, `emotion_detector_5class.py` automatically loads the saved calibration metadata. If the calibration file is absent, it safely falls back to temperature `1.0` and confidence threshold `0.70`.
+
+Do not publish participant face data without explicit consent. Increasing participant count can improve generalization, but an accuracy increase must be measured after retraining rather than assumed.
 
 ## 7. Anti-spoofing
 
