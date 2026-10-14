@@ -599,6 +599,32 @@ def draw_emotion_panel(
         1
     )
 
+    y += 24
+
+    adapter_threshold = float(
+        emotion_state.get(
+            "adapter_threshold",
+            0.70
+        )
+    )
+
+    draw_text(
+        canvas,
+        (
+            f"Adapter gate: "
+            f"{adapter_threshold * 100:.1f}%"
+        ),
+        x,
+        y,
+        (
+            160,
+            160,
+            160
+        ),
+        0.40,
+        1
+    )
+
     y += 26
 
     adapter_probs = emotion_state.get(
