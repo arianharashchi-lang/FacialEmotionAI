@@ -52,6 +52,11 @@ ADAPTER_CLASS_PATH = os.path.join(
     "sad_neutral_adapter_classes.json"
 )
 
+ADAPTER_CALIBRATION_PATH = os.path.join(
+    MODEL_DIR,
+    "sad_neutral_adapter_calibration.json"
+)
+
 
 # ============================================================
 # SETTINGS
@@ -67,7 +72,7 @@ PREDICT_EVERY_SAMPLES = 1
 SMOOTHING_ALPHA = 0.70
 
 # Adapter is only trusted when it is clearly confident.
-ADAPTER_CONFIDENCE_THRESHOLD = 0.70
+DEFAULT_ADAPTER_CONFIDENCE_THRESHOLD = 0.70
 
 # Do not let the adapter act when Sad+Neutral have essentially
 # no probability mass in the original V1 prediction.
@@ -159,7 +164,7 @@ class EmotionDetector5Class:
         sample_interval=SAMPLE_INTERVAL,
         predict_every_samples=PREDICT_EVERY_SAMPLES,
         smoothing_alpha=SMOOTHING_ALPHA,
-        adapter_confidence_threshold=ADAPTER_CONFIDENCE_THRESHOLD,
+        adapter_confidence_threshold=None,
     ):
 
         print("")
@@ -179,11 +184,32 @@ class EmotionDetector5Class:
             smoothing_alpha
         )
 
-        self.adapter_confidence_threshold = float(
-            adapter_confidence_threshold
+        self._check_files()
+
+        self.adapter_calibration = (
+            self._load_adapter_calibration(
+                ADAPTER_CALIBRATION_PATH
+            )
         )
 
-        self._check_files()
+        self.adapter_temperature = float(
+            self.adapter_calibration.get(
+                "temperature",
+                1.0
+            )
+        )
+
+        if adapter_confidence_threshold is None:
+            self.adapter_confidence_threshold = float(
+                self.adapter_calibration.get(
+                    "confidence_threshold",
+                    DEFAULT_ADAPTER_CONFIDENCE_THRESHOLD
+                )
+            )
+        else:
+            self.adapter_confidence_threshold = float(
+                adapter_confidence_threshold
+            )
 
         self.v1_classes = self._load_classes(
             V1_CLASS_PATH,
@@ -344,6 +370,19 @@ class EmotionDetector5Class:
             f"{self.adapter_confidence_threshold:.2f}"
         )
 
+        print(
+            f"Adapter temperature: "
+            f"{self.adapter_temperature:.3f}"
+        )
+
+        print(
+            "Calibration source:",
+            self.adapter_calibration.get(
+                "source",
+                "fallback"
+            )
+        )
+
         print("")
         print("=" * 72)
         print("FINAL 5-CLASS DETECTOR READY")
@@ -422,6 +461,70 @@ class EmotionDetector5Class:
             )
 
         return default_classes.copy()
+
+    @staticmethod
+    def _load_adapter_calibration(
+        path
+    ):
+
+        if not os.path.isfile(
+            path
+        ):
+            return {
+                "temperature": 1.0,
+                "confidence_threshold":
+                    DEFAULT_ADAPTER_CONFIDENCE_THRESHOLD,
+                "source": "fallback"
+            }
+
+        try:
+            with open(
+                path,
+                "r",
+                encoding="utf-8"
+            ) as file:
+
+                data = json.load(
+                    file
+                )
+
+            return {
+                "temperature":
+                    float(
+                        data.get(
+                            "temperature",
+                            1.0
+                        )
+                    ),
+
+                "confidence_threshold":
+                    float(
+                        data.get(
+                            "confidence_threshold",
+                            DEFAULT_ADAPTER_CONFIDENCE_THRESHOLD
+                        )
+                    ),
+
+                "source":
+                    data.get(
+                        "calibration_source",
+                        "file"
+                    )
+            }
+
+        except Exception as error:
+
+            print(
+                "[WARNING] Could not load adapter calibration:",
+                error
+            )
+
+            return {
+                "temperature": 1.0,
+                "confidence_threshold":
+                    DEFAULT_ADAPTER_CONFIDENCE_THRESHOLD,
+                "source": "fallback"
+            }
 
     @staticmethod
     def _normalize_probs(
@@ -633,6 +736,13 @@ class EmotionDetector5Class:
 
         adapter_probs = self._normalize_probs(
             adapter_probs
+        )
+
+        adapter_probs = (
+            emotion_logic.temperature_scale_probs(
+                adapter_probs,
+                self.adapter_temperature
+            )
         )
 
         (
@@ -924,6 +1034,12 @@ class EmotionDetector5Class:
 
             "adapter_confidence":
                 self.adapter_confidence,
+
+            "adapter_threshold":
+                self.adapter_confidence_threshold,
+
+            "adapter_temperature":
+                self.adapter_temperature,
 
             "classes":
                 FINAL_CLASSES.copy()
