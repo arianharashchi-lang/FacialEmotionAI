@@ -6,7 +6,18 @@
 [![Git LFS](https://img.shields.io/badge/models-Git%20LFS-informational)](https://git-lfs.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A portfolio/research project for **real-time facial emotion recognition** using OpenCV, a MobileNetV2 CNN feature extractor, BiLSTM + Temporal Attention, discriminator-based anti-spoofing, and a confidence-gated Sad/Neutral webcam adapter.
+**FacialEmotionAI** is an end-to-end **real-time facial emotion recognition** system for webcam video. It combines spoof screening, MobileNetV2 frame features, BiLSTM + Temporal Attention, and a five-class live runtime: **Angry, Happy, Surprise, Sad, Neutral**.
+
+**Why it is different:** instead of classifying isolated frames only, the runtime models a rolling **20-frame temporal sequence** and places a **Real/Fake discriminator gate** before emotion inference. The repository also includes reproducible benchmarks, CI-tested inference logic, privacy-conscious data handling, and the full training pipeline.
+
+**At a glance**
+- Final five-class fusion benchmark: **52.64% accuracy / 54.73% Macro F1** on the existing actor-wise RAVDESS test protocol (416 sequences).
+- Selected seven-class temporal backbone: **45.91% accuracy / 43.92% Macro F1**.
+- MobileNetV2 → 256-D features → BiLSTM → Temporal Attention.
+- Discriminator-based anti-spoofing before emotion inference.
+- MIT licensed; built with Python 3.11, TensorFlow, and OpenCV.
+
+[Quick start](#installation) · [Results](#main-results) · [Architecture](#architecture) · [Reproducibility](REPRODUCIBILITY.md)
 
 > This repository is intended for research and portfolio use. It is **not** a clinical or psychological diagnostic system.
 
