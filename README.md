@@ -99,15 +99,17 @@ Raw RAVDESS files are intentionally **not included** in this repository.
 
 ## Main results
 
-| Model | Test Accuracy | Macro F1 |
+| Model / deployment mode | Test Accuracy | Macro F1 |
 |---|---:|---:|
-| CNN baseline | 41.49% | 40.00% |
-| **LSTM V1 Rebuild** | **45.91%** | **43.92%** |
-| LSTM V2 | 43.27% | 36.18% |
-| LSTM V3 | 44.23% | 41.95% |
-| LSTM V4 | 43.27% | 41.82% |
+| CNN baseline (7-class) | 41.49% | 40.00% |
+| **LSTM V1 Rebuild (7-class)** | **45.91%** | **43.92%** |
+| LSTM V2 (7-class) | 43.27% | 36.18% |
+| LSTM V3 (7-class) | 44.23% | 41.95% |
+| LSTM V4 (7-class) | 43.27% | 41.82% |
+| **Final 5-class fusion only** | **52.64%** | **54.73%** |
+| Final 5-class + adapter | 46.39% | 45.45% |
 
-The deployed temporal backbone is **LSTM V1 Rebuild**.
+The deployed temporal backbone is **LSTM V1 Rebuild**. The five-class benchmark uses the existing unseen-actor RAVDESS test split (Actors 21–24, 416 sequences). Because class fusion changes the task, the five-class scores are not directly comparable to the original seven-class scores as a pure model-improvement claim.
 
 ### Sad / Neutral webcam adapter
 
@@ -268,14 +270,14 @@ Do not commit participant face data without explicit consent.
 
 - RAVDESS contains acted emotions and only 24 actors.
 - Real-world pose, lighting, camera quality, occlusion, and identity variation can reduce performance.
-- The final 5-class class-fusion deployment was not independently re-benchmarked as a new held-out 5-class test set.
+- The final five-class deployment has been benchmarked on Actors 21–24, but that same test split was also used during earlier model comparison, so it is not a pristine post-selection benchmark.
 - The Sad/Neutral adapter was evaluated on only two participants.
 - Anti-spoofing metrics depend on the collected Real/Fake dataset and should not be interpreted as universal spoof-detection performance.
 - Softmax scores are model confidence values, not psychological certainty.
 
 ## Future work
 
-- Evaluate the final five-class system on a larger unseen-person benchmark.
+- Evaluate the final five-class system on a new external or otherwise untouched unseen-person benchmark.
 - Expand real-world multi-person data collection with explicit consent.
 - Improve anti-spoofing evaluation across print, display, replay, and synthetic attacks.
 - Add face tracking for stable temporal identity continuity.
