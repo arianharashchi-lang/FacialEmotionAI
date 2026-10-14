@@ -150,3 +150,29 @@ This evaluates the existing unseen-actor test split (Actors 21–24) in two mode
 Outputs are written to `results/final_5class/` and include text reports, confusion matrices, JSON metrics, and per-sequence predictions.
 
 The benchmark is sequence-level and intentionally does **not** apply live webcam smoothing across independent RAVDESS sequences. Actors 21–24 were unseen during model training, but the repository also notes that this test split was used during earlier model comparison, so it should not be described as a pristine post-selection benchmark.
+
+## 10. Anti-spoofing robustness evaluation
+
+The original anti-spoofing training script uses a seeded random image-level validation split. The committed perfect validation score should therefore be treated only as a project-specific development result, not as evidence of robustness to new presentation attacks.
+
+For a separate robustness check, collect fresh local evaluation sessions by category. Example:
+
+```powershell
+python collect_anti_spoof_eval.py --category real --session daylight01
+python collect_anti_spoof_eval.py --category print --session print01
+python collect_anti_spoof_eval.py --category phone --session phone01
+python collect_anti_spoof_eval.py --category monitor --session monitor01
+python collect_anti_spoof_eval.py --category replay --session replay01
+```
+
+The collector stores images under the ignored `data/anti_spoof_eval/` tree. Collect multiple short sessions with different angles, distances, and lighting conditions rather than a large number of nearly identical adjacent frames.
+
+Then run:
+
+```powershell
+python benchmark_anti_spoof.py
+```
+
+The benchmark uses the deployed runtime threshold (`real_threshold = 0.65`) and reports overall accuracy, per-category spoof rejection, and PAD-style APCER/BPCER/ACER values. Outputs are written to `results/anti_spoofing_robustness/`.
+
+These metrics describe only the locally collected evaluation set and are **not** a certified or universal face presentation-attack benchmark. Raw face media should remain private unless explicit consent permits publication.
