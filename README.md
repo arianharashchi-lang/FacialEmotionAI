@@ -229,6 +229,17 @@ FacialEmotionAI/
 └── LICENSE
 ```
 
+## Development tests
+
+The class-fusion, probability handling, confidence policy, and Sad/Neutral adapter gate are covered by lightweight unit tests that do not require a webcam, private datasets, or TensorFlow model loading.
+
+```powershell
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+GitHub Actions runs both Python syntax compilation and these unit tests for pushes and pull requests targeting `main`.
+
 ## Reproducing training
 
 The repository keeps the training and preprocessing code but excludes large/raw datasets and private webcam captures.
