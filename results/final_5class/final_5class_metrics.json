@@ -1,0 +1,199 @@
+{
+  "protocol": {
+    "source": "Existing actor-wise RAVDESS test split",
+    "test_actors": "21-24",
+    "sample_count": 416,
+    "sequence_shape": [
+      20,
+      256
+    ],
+    "ground_truth_fusion": {
+      "fear": "surprise",
+      "disgust": "sad"
+    },
+    "note": "Actors 21-24 are unseen during training, but this is not a pristine post-selection test set because earlier temporal model variants were compared using the same actor-wise test split.",
+    "runtime_smoothing_included": false
+  },
+  "fusion_only": {
+    "accuracy": 0.5264423076923077,
+    "macro_f1": 0.5472639748725752,
+    "weighted_f1": 0.5270098405549177,
+    "classification_report": {
+      "angry": {
+        "precision": 0.3708609271523179,
+        "recall": 0.875,
+        "f1-score": 0.5209302325581395,
+        "support": 64.0
+      },
+      "happy": {
+        "precision": 0.9523809523809523,
+        "recall": 0.625,
+        "f1-score": 0.7547169811320755,
+        "support": 64.0
+      },
+      "surprise": {
+        "precision": 0.6,
+        "recall": 0.375,
+        "f1-score": 0.46153846153846156,
+        "support": 128.0
+      },
+      "sad": {
+        "precision": 0.6857142857142857,
+        "recall": 0.375,
+        "f1-score": 0.48484848484848486,
+        "support": 128.0
+      },
+      "neutral": {
+        "precision": 0.3698630136986301,
+        "recall": 0.84375,
+        "f1-score": 0.5142857142857142,
+        "support": 32.0
+      },
+      "accuracy": 0.5264423076923077,
+      "macro avg": {
+        "precision": 0.5957638357892373,
+        "recall": 0.61875,
+        "f1-score": 0.5472639748725752,
+        "support": 416.0
+      },
+      "weighted avg": {
+        "precision": 0.6276310704324856,
+        "recall": 0.5264423076923077,
+        "f1-score": 0.5270098405549177,
+        "support": 416.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        56,
+        0,
+        5,
+        3,
+        0
+      ],
+      [
+        6,
+        40,
+        12,
+        0,
+        6
+      ],
+      [
+        44,
+        2,
+        48,
+        19,
+        15
+      ],
+      [
+        43,
+        0,
+        12,
+        48,
+        25
+      ],
+      [
+        2,
+        0,
+        3,
+        0,
+        27
+      ]
+    ]
+  },
+  "adapter_assisted": {
+    "accuracy": 0.4639423076923077,
+    "macro_f1": 0.4544572897788945,
+    "weighted_f1": 0.4674086851276153,
+    "classification_report": {
+      "angry": {
+        "precision": 0.3708609271523179,
+        "recall": 0.875,
+        "f1-score": 0.5209302325581395,
+        "support": 64.0
+      },
+      "happy": {
+        "precision": 0.9523809523809523,
+        "recall": 0.625,
+        "f1-score": 0.7547169811320755,
+        "support": 64.0
+      },
+      "surprise": {
+        "precision": 0.5853658536585366,
+        "recall": 0.375,
+        "f1-score": 0.45714285714285713,
+        "support": 128.0
+      },
+      "sad": {
+        "precision": 0.45263157894736844,
+        "recall": 0.3359375,
+        "f1-score": 0.38565022421524664,
+        "support": 128.0
+      },
+      "neutral": {
+        "precision": 0.13043478260869565,
+        "recall": 0.1875,
+        "f1-score": 0.15384615384615385,
+        "support": 32.0
+      },
+      "accuracy": 0.4639423076923077,
+      "macro avg": {
+        "precision": 0.4983348189495742,
+        "recall": 0.4796875,
+        "f1-score": 0.4544572897788945,
+        "support": 416.0
+      },
+      "weighted avg": {
+        "precision": 0.5329929440076042,
+        "recall": 0.4639423076923077,
+        "f1-score": 0.4674086851276153,
+        "support": 416.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        56,
+        0,
+        5,
+        3,
+        0
+      ],
+      [
+        6,
+        40,
+        12,
+        0,
+        6
+      ],
+      [
+        44,
+        2,
+        48,
+        28,
+        6
+      ],
+      [
+        43,
+        0,
+        14,
+        43,
+        28
+      ],
+      [
+        2,
+        0,
+        3,
+        21,
+        6
+      ]
+    ]
+  },
+  "adapter": {
+    "confidence_threshold": 0.7,
+    "minimum_sad_neutral_group_mass": 0.15,
+    "activation_count": 101,
+    "activation_rate": 0.24278846153846154,
+    "mean_adapter_confidence": 0.7119059455222808,
+    "caveat": "The adapter was trained on a very small private two-participant webcam dataset. Applying it to RAVDESS measures cross-domain behavior and does not make its performance population-level evidence."
+  }
+}
