@@ -133,3 +133,20 @@ python main_5class.py
 - The webcam adapter dataset is intentionally private and small.
 - Random seeds are set in the main training scripts where practical, but exact reproducibility can still vary across TensorFlow versions and hardware.
 - The final class-fusion deployment has not been independently re-benchmarked on a new held-out five-class test set.
+
+## 9. Benchmark the final five-class deployment
+
+After the actor-wise test features exist under `data/lstm_features/test/`, run:
+
+```powershell
+python benchmark_final_5class.py
+```
+
+This evaluates the existing unseen-actor test split (Actors 21–24) in two modes:
+
+1. **Fusion only** — Fear is merged into Surprise and Disgust into Sad.
+2. **Adapter assisted** — the same five-class fusion plus the confidence-gated Sad/Neutral adapter.
+
+Outputs are written to `results/final_5class/` and include text reports, confusion matrices, JSON metrics, and per-sequence predictions.
+
+The benchmark is sequence-level and intentionally does **not** apply live webcam smoothing across independent RAVDESS sequences. Actors 21–24 were unseen during model training, but the repository also notes that this test split was used during earlier model comparison, so it should not be described as a pristine post-selection benchmark.
