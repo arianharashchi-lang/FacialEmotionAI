@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FacialEmotionAI Live Demo</title>
+  <meta name="description" content="Live temporal facial-expression analysis demo for FacialEmotionAI.">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <span class="eyebrow">FACIALEMOTIONAI</span>
+        <h1>Live facial-expression analysis</h1>
+        <p class="lead">Webcam → anti-spoofing → MobileNetV2 → 20-frame buffer → BiLSTM + Attention → five classes.</p>
+      </div>
+      <a class="github" href="https://github.com/arianharashchi-lang/FacialEmotionAI" target="_blank" rel="noreferrer">GitHub</a>
+    </header>
+
+    <section class="panel">
+      <div class="camera">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <div id="overlay" class="overlay">Camera is off</div>
+      </div>
+
+      <aside class="result">
+        <div class="kicker">Current expression</div>
+        <div id="emotion" class="emotion">—</div>
+        <div id="confidence" class="confidence">0%</div>
+        <div id="reliability" class="reliability">WARMUP</div>
+        <div id="bars"></div>
+        <div id="spoof" class="spoof">Anti-spoofing: —</div>
+      </aside>
+    </section>
+
+    <section class="controls">
+      <button id="load" class="primary">Load AI Engine</button>
+      <button id="start" class="primary">Start Camera</button>
+      <button id="analyze" class="primary">Analyze 20-frame burst</button>
+      <button id="switch">Switch Camera</button>
+      <button id="stop" class="danger">Stop</button>
+    </section>
+
+    <p id="status" class="status">Engine not loaded.</p>
+
+    <section class="upload-section" style="margin-top:28px;padding:20px;border:1px solid rgba(137,186,255,.18);border-radius:20px;background:rgba(12,25,43,.62)">
+      <div class="upload-head">
+        <div>
+          <span class="eyebrow">VIDEO ANALYSIS</span>
+          <h2>Upload a video</h2>
+          <p class="lead small">Analyze a local video up to 5 minutes and export the timeline.</p>
+        </div>
+      </div>
+
+      <div class="upload-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input id="videoFile" type="file" accept="video/*">
+        <button id="analyzeVideo" class="primary">Analyze Video</button>
+      </div>
+      <p id="videoStatus" class="status">No video selected.</p>
+
+      <div id="videoResult" class="video-result" style="margin-top:18px">
+        <div class="summary-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0">
+          <div><span>Dominant expression</span><strong id="videoDominant">—</strong></div>
+          <div><span>Average confidence</span><strong id="videoConfidence">—</strong></div>
+        </div>
+        <div id="videoBars"></div>
+        <div class="controls">
+          <button id="downloadCsv">Download CSV</button>
+          <button id="printReport">Print / Save PDF</button>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+    </section>
+
+    <section class="note">
+      <strong>Research scope:</strong>
+      FacialEmotionAI estimates visible facial-expression categories. It does not determine a person's internal psychological state and is not a clinical or diagnostic system.
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
