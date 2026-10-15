@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -43,7 +45,7 @@ class ModelRuntime:
         with self.lock:
             self.emotion_detector.reset()
 
-    def analyze(self, frame: np.ndarray) -> dict[str, Any]:
+    def analyze(self, frame: np.ndarray, force_sample: bool = False) -> dict[str, Any]:
         with self.lock:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             boxes = self.face_detector.detectMultiScale(
@@ -89,6 +91,9 @@ class ModelRuntime:
                     "message": "Frame rejected by anti-spoofing gate.",
                     "emotion": self.emotion_detector.get_state(),
                 }
+
+            if force_sample:
+                self.emotion_detector.last_sample_time = 0.0
 
             emotion = self.emotion_detector.update(face)
 
@@ -174,3 +179,126 @@ def reset_engine() -> dict[str, str]:
 async def analyze_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
     image = decode_image(await frame.read())
     return get_runtime().analyze(image)
+
+
+@app.post("/api/video")
+async def analyze_video(video: UploadFile = File(...)) -> dict[str, Any]:
+    suffix = Path(video.filename or "upload.mp4").suffix.lower()
+    allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+    if suffix not in allowed:
+        raise HTTPException(status_code=400, detail="Unsupported video format.")
+
+    runtime = get_runtime()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        temp_path = tmp.name
+        while True:
+            chunk = await video.read(1024 * 1024)
+            if not chunk:
+                break
+            tmp.write(chunk)
+
+    capture = cv2.VideoCapture(temp_path)
+
+    try:
+        if not capture.isOpened():
+            raise HTTPException(status_code=400, detail="Could not open video.")
+
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if fps <= 0:
+            fps = 25.0
+
+        duration = total_frames / fps if total_frames > 0 else 0.0
+        if duration > 300:
+            raise HTTPException(status_code=400, detail="Maximum video length is 5 minutes.")
+
+        target_sample_fps = 8.0
+        stride = max(1, int(round(fps / target_sample_fps)))
+
+        runtime.reset()
+
+        timeline = []
+        probability_rows = []
+        confidences = []
+        frame_index = 0
+        sampled_with_face = 0
+
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+
+            if frame_index % stride != 0:
+                frame_index += 1
+                continue
+
+            result = runtime.analyze(frame, force_sample=True)
+
+            if result.get("face_detected"):
+                sampled_with_face += 1
+
+            emotion = result.get("emotion") or {}
+            if emotion.get("ready") and emotion.get("label"):
+                probabilities = emotion.get("probabilities") or {}
+                confidence = float(emotion.get("confidence") or 0.0)
+
+                timeline.append({
+                    "time": round(frame_index / fps, 2),
+                    "label": emotion.get("label"),
+                    "confidence": round(confidence, 4),
+                    "reliability": emotion.get("reliability"),
+                    "probabilities": {
+                        name: round(float(value), 4)
+                        for name, value in probabilities.items()
+                    },
+                })
+
+                probability_rows.append({
+                    name: float(value)
+                    for name, value in probabilities.items()
+                })
+                confidences.append(confidence)
+
+            frame_index += 1
+
+        if not timeline:
+            return {
+                "status": "completed",
+                "duration_seconds": round(duration, 2),
+                "sampled_frames_with_face": sampled_with_face,
+                "timeline": [],
+                "summary": None,
+                "message": "No ready temporal predictions were produced.",
+            }
+
+        classes = runtime.emotion_detector.get_state()["classes"]
+        averages = {
+            name: float(np.mean([row.get(name, 0.0) for row in probability_rows]))
+            for name in classes
+        }
+
+        dominant = max(averages, key=averages.get)
+
+        return {
+            "status": "completed",
+            "duration_seconds": round(duration, 2),
+            "sampled_frames_with_face": sampled_with_face,
+            "timeline": timeline,
+            "summary": {
+                "dominant_expression": dominant,
+                "average_confidence": round(float(np.mean(confidences)), 4),
+                "average_probabilities": {
+                    name: round(value, 4)
+                    for name, value in averages.items()
+                },
+            },
+            "message": "Video analysis complete.",
+        }
+
+    finally:
+        capture.release()
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
