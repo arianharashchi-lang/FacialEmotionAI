@@ -37,6 +37,13 @@
 - Final model artifacts stored with **Git LFS**.
 - Raw datasets, webcam captures, adaptation samples, and local databases are excluded from Git.
 
+## Architecture Video
+
+[![Watch the FacialEmotionAI architecture walkthrough](docs/architecture.png)](https://d2ol7oe51mr4n9.cloudfront.net/user_3K8P0B0phId4N0d4AmHg2YA7msy/64ba4a94-ab30-41b0-ba02-790aad338b3d.mp4)
+
+**▶ [Watch the narrated architecture walkthrough](https://d2ol7oe51mr4n9.cloudfront.net/user_3K8P0B0phId4N0d4AmHg2YA7msy/64ba4a94-ab30-41b0-ba02-790aad338b3d.mp4)**  
+Grady voice · English subtitles · training pipeline, anti-spoofing, temporal inference, class fusion, and Sad/Neutral refinement.
+
 ## Architecture
 
 ![System architecture](docs/architecture.png)
