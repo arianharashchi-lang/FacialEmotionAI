@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FacialEmotionAI Live Demo</title>
+  <meta name="description" content="Live temporal facial-expression analysis demo for FacialEmotionAI.">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div>
+        <span class="eyebrow">FACIALEMOTIONAI</span>
+        <h1>Live facial-expression analysis</h1>
+        <p class="lead">Webcam → anti-spoofing → MobileNetV2 → 20-frame buffer → BiLSTM + Attention → five classes.</p>
+      </div>
+      <a class="github" href="https://github.com/arianharashchi-lang/FacialEmotionAI" target="_blank" rel="noreferrer">GitHub</a>
+    </header>
+
+    <section class="panel">
+      <div class="camera">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <div id="overlay" class="overlay">Camera is off</div>
+      </div>
+
+      <aside class="result">
+        <div class="kicker">Current expression</div>
+        <div id="emotion" class="emotion">—</div>
+        <div id="confidence" class="confidence">0%</div>
+        <div id="reliability" class="reliability">WARMUP</div>
+        <div id="bars"></div>
+        <div id="spoof" class="spoof">Anti-spoofing: —</div>
+      </aside>
+    </section>
+
+    <section class="controls">
+      <button id="load" class="primary">Load AI Engine</button>
+      <button id="start" class="primary">Start Camera</button>
+      <button id="switch">Switch Camera</button>
+      <button id="stop" class="danger">Stop</button>
+    </section>
+
+    <p id="status" class="status">Engine not loaded.</p>
+
+    <section class="note">
+      <strong>Research scope:</strong>
+      FacialEmotionAI estimates visible facial-expression categories. It does not determine a person's internal psychological state and is not a clinical or diagnostic system.
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
