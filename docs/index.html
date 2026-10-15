@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#07111f">
+  <meta name="description" content="FacialEmotionAI is an open-source temporal facial-expression analysis project using MobileNetV2, BiLSTM attention, anti-spoofing, and five-class live inference.">
+  <meta property="og:title" content="FacialEmotionAI — Temporal Facial Expression Analysis">
+  <meta property="og:description" content="Open-source webcam and video facial-expression analysis with temporal attention and anti-spoofing.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://arianharashchi-lang.github.io/FacialEmotionAI/">
+  <link rel="canonical" href="https://arianharashchi-lang.github.io/FacialEmotionAI/">
+  <title>FacialEmotionAI — Temporal Facial Expression Analysis</title>
+  <style>
+    :root{color-scheme:dark;--bg:#050b14;--text:#eef6ff;--muted:#95a7ba;--line:rgba(137,186,255,.18);--accent:#50d7ff;--purple:#8b7cff}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(circle at 15% 0%,rgba(80,215,255,.13),transparent 30%),radial-gradient(circle at 90% 10%,rgba(139,124,255,.12),transparent 30%),var(--bg)}
+    .wrap{width:min(1080px,calc(100% - 32px));margin:auto}.nav{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{font-weight:850;letter-spacing:-.03em}.nav a{color:var(--muted);text-decoration:none;margin-left:16px}
+    .hero{padding:90px 0 70px;max-width:900px}.eyebrow{font-size:.78rem;letter-spacing:.15em;color:var(--accent);font-weight:800}.hero h1{font-size:clamp(3rem,8vw,7rem);line-height:.9;letter-spacing:-.06em;margin:15px 0 28px}.lead{font-size:1.15rem;line-height:1.75;color:var(--muted);max-width:760px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}.btn{display:inline-flex;padding:13px 17px;border-radius:13px;text-decoration:none;font-weight:800}.primary{background:linear-gradient(135deg,var(--accent),#8aeaff);color:#00121b}.secondary{border:1px solid var(--line);color:var(--text);background:rgba(255,255,255,.03)}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0 70px}.card{border:1px solid var(--line);border-radius:20px;background:rgba(12,25,43,.65);padding:24px;min-height:180px}.card h2{margin-top:0}.card p{color:var(--muted);line-height:1.65}.metric{font-size:2rem;font-weight:850;color:var(--accent)}
+    .section{padding:52px 0;border-top:1px solid var(--line)}.section h2{font-size:2rem;letter-spacing:-.03em}.pipeline{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#bdeeff;background:#081524;border:1px solid var(--line);border-radius:18px;padding:20px;overflow:auto;white-space:pre}.note{color:var(--muted);line-height:1.75}
+    footer{padding:30px 0 50px;border-top:1px solid var(--line);color:var(--muted);display:flex;justify-content:space-between;gap:14px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.hero{padding-top:55px}.nav-links{display:none}footer{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <div class="brand">FacialEmotionAI</div>
+      <div class="nav-links">
+        <a href="#research">Research</a>
+        <a href="#architecture">Architecture</a>
+        <a href="https://github.com/arianharashchi-lang/FacialEmotionAI">GitHub</a>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">OPEN-SOURCE COMPUTER VISION PROJECT</div>
+        <h1>Temporal facial-expression analysis.</h1>
+        <p class="lead">
+          FacialEmotionAI combines MobileNetV2 visual features, a 20-frame temporal sequence, BiLSTM + Temporal Attention, a Real/Fake screening gate, and five-class live output.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/arianharashchi-lang/FacialEmotionAI">View project on GitHub</a>
+          <a class="btn secondary" href="#live-demo">Live demo instructions</a>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="card"><div class="metric">52.64%</div><h2>5-class accuracy</h2><p>Measured on the existing 416-sequence actor-wise RAVDESS test split after class fusion.</p></article>
+        <article class="card"><div class="metric">54.73%</div><h2>Macro F1</h2><p>Five-class fusion benchmark. It is a different task from the original seven-class benchmark.</p></article>
+        <article class="card"><div class="metric">20 frames</div><h2>Temporal context</h2><p>Predictions use a rolling sequence instead of treating each webcam frame as fully independent.</p></article>
+      </section>
+
+      <section id="architecture" class="section">
+        <h2>Architecture</h2>
+        <div class="pipeline">Webcam / Video
+      ↓
+OpenCV face detection
+      ↓
+Real / Fake discriminator
+      ↓
+MobileNetV2 feature extractor
+      ↓
+256-D feature vector × 20 frames
+      ↓
+BiLSTM + Temporal Attention
+      ↓
+7 → 5 class fusion
+      ↓
+Confidence-aware Sad / Neutral refinement</div>
+      </section>
+
+      <section id="research" class="section">
+        <h2>Research scope</h2>
+        <p class="note">
+          FacialEmotionAI estimates visible facial-expression categories. Model confidence is not psychological certainty. The project is intended for research, learning, human-computer interaction experiments, and portfolio demonstration — not clinical diagnosis, hiring decisions, lie detection, or mental-state assessment.
+        </p>
+      </section>
+
+      <section id="live-demo" class="section">
+        <h2>Live demo</h2>
+        <p class="note">
+          The interactive FastAPI demo can run on the project owner's computer and be exposed temporarily over HTTPS with Cloudflare Tunnel. The permanent public landing page remains online even when the local AI server is offline.
+        </p>
+        <a class="btn secondary" href="https://github.com/arianharashchi-lang/FacialEmotionAI">Open the project</a>
+      </section>
+    </main>
+
+    <footer>
+      <span>MIT Licensed • FacialEmotionAI</span>
+      <span>TensorFlow • OpenCV • FastAPI</span>
+    </footer>
+  </div>
+</body>
+</html>

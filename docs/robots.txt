@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://arianharashchi-lang.github.io/FacialEmotionAI/sitemap.xml
