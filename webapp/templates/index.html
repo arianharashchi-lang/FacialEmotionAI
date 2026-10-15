@@ -38,13 +38,14 @@
     <section class="controls">
       <button id="load" class="primary">Load AI Engine</button>
       <button id="start" class="primary">Start Camera</button>
-      <button id="analyze" class="primary">Analyze 20-frame burst</button>\n      <button id="switch">Switch Camera</button>
+      <button id="analyze" class="primary">Analyze 20-frame burst</button>
+      <button id="switch">Switch Camera</button>
       <button id="stop" class="danger">Stop</button>
     </section>
 
     <p id="status" class="status">Engine not loaded.</p>
 
-    <section class="upload-section">
+    <section class="upload-section" style="margin-top:28px;padding:20px;border:1px solid rgba(137,186,255,.18);border-radius:20px;background:rgba(12,25,43,.62)">
       <div class="upload-head">
         <div>
           <span class="eyebrow">VIDEO ANALYSIS</span>
@@ -53,14 +54,14 @@
         </div>
       </div>
 
-      <div class="upload-controls">
+      <div class="upload-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <input id="videoFile" type="file" accept="video/*">
         <button id="analyzeVideo" class="primary">Analyze Video</button>
       </div>
       <p id="videoStatus" class="status">No video selected.</p>
 
-      <div id="videoResult" class="video-result hidden">
-        <div class="summary-grid">
+      <div id="videoResult" class="video-result" style="display:none;margin-top:18px">
+        <div class="summary-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0">
           <div><span>Dominant expression</span><strong id="videoDominant">—</strong></div>
           <div><span>Average confidence</span><strong id="videoConfidence">—</strong></div>
         </div>
