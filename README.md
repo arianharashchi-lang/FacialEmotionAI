@@ -41,6 +41,12 @@
 
 ![System architecture](docs/architecture.png)
 
+*High-level architecture of the FacialEmotionAI training and live-inference pipeline, including anti-spoofing, temporal emotion modeling, seven-to-five class fusion, and Sad/Neutral adapter refinement.*
+
+**Interactive codebase map:** [Explore FacialEmotionAI on GitDiagram](https://gitdiagram.com/arianharashchi-lang/FacialEmotionAI)
+
+> GitDiagram is an automatically generated repository overview. It is useful for navigating the codebase quickly, while this README and the source files remain the authoritative reference for runtime behavior, confidence calibration, and evaluation details.
+
 ```text
 Webcam
   ↓
