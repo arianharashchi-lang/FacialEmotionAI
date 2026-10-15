@@ -44,6 +44,35 @@
 
     <p id="status" class="status">Engine not loaded.</p>
 
+    <section class="upload-section">
+      <div class="upload-head">
+        <div>
+          <span class="eyebrow">VIDEO ANALYSIS</span>
+          <h2>Upload a video</h2>
+          <p class="lead small">Analyze a local video up to 5 minutes and export the timeline.</p>
+        </div>
+      </div>
+
+      <div class="upload-controls">
+        <input id="videoFile" type="file" accept="video/*">
+        <button id="analyzeVideo" class="primary">Analyze Video</button>
+      </div>
+      <p id="videoStatus" class="status">No video selected.</p>
+
+      <div id="videoResult" class="video-result hidden">
+        <div class="summary-grid">
+          <div><span>Dominant expression</span><strong id="videoDominant">—</strong></div>
+          <div><span>Average confidence</span><strong id="videoConfidence">—</strong></div>
+        </div>
+        <div id="videoBars"></div>
+        <div class="controls">
+          <button id="downloadCsv">Download CSV</button>
+          <button id="printReport">Print / Save PDF</button>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+    </section>
+
     <section class="note">
       <strong>Research scope:</strong>
       FacialEmotionAI estimates visible facial-expression categories. It does not determine a person's internal psychological state and is not a clinical or diagnostic system.
