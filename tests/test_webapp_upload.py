@@ -117,3 +117,38 @@ def test_frame_analysis_waits_while_video_holds_runtime_lock(monkeypatch):
     assert not worker.is_alive()
     assert detector_called.is_set()
     assert frame_finished.is_set()
+
+
+
+def test_oversized_frame_returns_413(monkeypatch):
+    monkeypatch.setattr(webapp, "MAX_FRAME_UPLOAD_BYTES", 10)
+
+    def should_not_decode(data):
+        raise AssertionError("Oversized image must not be decoded.")
+
+    monkeypatch.setattr(webapp, "decode_image", should_not_decode)
+
+    client = TestClient(webapp.app)
+    response = client.post(
+        "/api/frame",
+        files={"frame": ("large.jpg", b"x" * 11, "image/jpeg")},
+    )
+
+    assert response.status_code == 413
+    assert "10 MB" in response.json()["detail"]
+
+
+def test_empty_frame_returns_400(monkeypatch):
+    def should_not_decode(data):
+        raise AssertionError("Empty image must not be decoded.")
+
+    monkeypatch.setattr(webapp, "decode_image", should_not_decode)
+
+    client = TestClient(webapp.app)
+    response = client.post(
+        "/api/frame",
+        files={"frame": ("empty.jpg", b"", "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Uploaded image is empty."

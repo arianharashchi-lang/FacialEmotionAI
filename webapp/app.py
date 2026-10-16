@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 import threading
@@ -21,6 +22,7 @@ STATIC_DIR = BASE_DIR / "static"
 TEMPLATE_DIR = BASE_DIR / "templates"
 
 MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024
+MAX_FRAME_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 class ModelRuntime:
@@ -180,9 +182,24 @@ def reset_engine() -> dict[str, str]:
 @app.post("/api/frame")
 async def analyze_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
     try:
-        image = decode_image(await frame.read())
-        runtime = await __import__("asyncio").to_thread(get_runtime)
-        return await __import__("asyncio").to_thread(runtime.analyze, image)
+        image_bytes = await frame.read(MAX_FRAME_UPLOAD_BYTES + 1)
+
+        if len(image_bytes) > MAX_FRAME_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Image file exceeds the 10 MB upload limit.",
+            )
+
+        if not image_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded image is empty.",
+            )
+
+        image = decode_image(image_bytes)
+        runtime = await asyncio.to_thread(get_runtime)
+
+        return await asyncio.to_thread(runtime.analyze, image)
     finally:
         await frame.close()
 
