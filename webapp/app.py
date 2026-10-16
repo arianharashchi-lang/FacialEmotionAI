@@ -20,6 +20,8 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATE_DIR = BASE_DIR / "templates"
 
+MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024
+
 
 class ModelRuntime:
     """Single-user MVP runtime that reuses one loaded model stack."""
@@ -177,128 +179,165 @@ def reset_engine() -> dict[str, str]:
 
 @app.post("/api/frame")
 async def analyze_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
-    image = decode_image(await frame.read())
-    return get_runtime().analyze(image)
+    try:
+        image = decode_image(await frame.read())
+        runtime = await __import__("asyncio").to_thread(get_runtime)
+        return await __import__("asyncio").to_thread(runtime.analyze, image)
+    finally:
+        await frame.close()
+
+
+def _analyze_video_path(temp_path: str) -> dict[str, Any]:
+    capture = cv2.VideoCapture(temp_path)
+
+    try:
+        if not capture.isOpened():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not open video.",
+            )
+
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+        if fps <= 0:
+            fps = 25.0
+
+        duration = total_frames / fps if total_frames > 0 else 0.0
+        if duration > 300:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum video length is 5 minutes.",
+            )
+
+        runtime = get_runtime()
+        with runtime.lock:
+            runtime.reset()
+
+            timeline = []
+            probability_rows = []
+            confidences = []
+            frame_index = 0
+            sampled_with_face = 0
+            stride = max(1, int(round(fps / 8.0)))
+
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+
+                if frame_index % stride != 0:
+                    frame_index += 1
+                    continue
+
+                result = runtime.analyze(frame, force_sample=True)
+
+                if result.get("face_detected"):
+                    sampled_with_face += 1
+
+                emotion = result.get("emotion") or {}
+                if emotion.get("ready") and emotion.get("label"):
+                    probabilities = emotion.get("probabilities") or {}
+                    confidence = float(emotion.get("confidence") or 0.0)
+
+                    timeline.append({
+                        "time": round(frame_index / fps, 2),
+                        "label": emotion.get("label"),
+                        "confidence": round(confidence, 4),
+                        "reliability": emotion.get("reliability"),
+                        "probabilities": {
+                            name: round(float(value), 4)
+                            for name, value in probabilities.items()
+                        },
+                    })
+
+                    probability_rows.append({
+                        name: float(value)
+                        for name, value in probabilities.items()
+                    })
+                    confidences.append(confidence)
+
+                frame_index += 1
+
+            if not timeline:
+                return {
+                    "status": "completed",
+                    "duration_seconds": round(duration, 2),
+                    "sampled_frames_with_face": sampled_with_face,
+                    "timeline": [],
+                    "summary": None,
+                    "message": "No ready temporal predictions were produced.",
+                }
+
+            classes = runtime.emotion_detector.get_state()["classes"]
+            averages = {
+                name: float(np.mean([
+                    row.get(name, 0.0) for row in probability_rows
+                ]))
+                for name in classes
+            }
+            dominant = max(averages, key=averages.get)
+
+            return {
+                "status": "completed",
+                "duration_seconds": round(duration, 2),
+                "sampled_frames_with_face": sampled_with_face,
+                "timeline": timeline,
+                "summary": {
+                    "dominant_expression": dominant,
+                    "average_confidence": round(
+                        float(np.mean(confidences)), 4
+                    ),
+                    "average_probabilities": {
+                        name: round(value, 4)
+                        for name, value in averages.items()
+                    },
+                },
+                "message": "Video analysis complete.",
+            }
+    finally:
+        capture.release()
 
 
 @app.post("/api/video")
 async def analyze_video(video: UploadFile = File(...)) -> dict[str, Any]:
     suffix = Path(video.filename or "upload.mp4").suffix.lower()
     allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+
     if suffix not in allowed:
+        await video.close()
         raise HTTPException(status_code=400, detail="Unsupported video format.")
 
-    runtime = get_runtime()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        temp_path = tmp.name
-        while True:
-            chunk = await video.read(1024 * 1024)
-            if not chunk:
-                break
-            tmp.write(chunk)
-
-    capture = cv2.VideoCapture(temp_path)
+    temp_path: str | None = None
 
     try:
-        if not capture.isOpened():
-            raise HTTPException(status_code=400, detail="Could not open video.")
+        uploaded_bytes = 0
 
-        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
-        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        if fps <= 0:
-            fps = 25.0
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            temp_path = tmp.name
 
-        duration = total_frames / fps if total_frames > 0 else 0.0
-        if duration > 300:
-            raise HTTPException(status_code=400, detail="Maximum video length is 5 minutes.")
+            while True:
+                chunk = await video.read(1024 * 1024)
+                if not chunk:
+                    break
 
-        target_sample_fps = 8.0
-        stride = max(1, int(round(fps / target_sample_fps)))
+                uploaded_bytes += len(chunk)
+                if uploaded_bytes > MAX_VIDEO_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="Video file exceeds the 100 MB upload limit.",
+                    )
 
-        runtime.reset()
+                tmp.write(chunk)
 
-        timeline = []
-        probability_rows = []
-        confidences = []
-        frame_index = 0
-        sampled_with_face = 0
-
-        while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
-
-            if frame_index % stride != 0:
-                frame_index += 1
-                continue
-
-            result = runtime.analyze(frame, force_sample=True)
-
-            if result.get("face_detected"):
-                sampled_with_face += 1
-
-            emotion = result.get("emotion") or {}
-            if emotion.get("ready") and emotion.get("label"):
-                probabilities = emotion.get("probabilities") or {}
-                confidence = float(emotion.get("confidence") or 0.0)
-
-                timeline.append({
-                    "time": round(frame_index / fps, 2),
-                    "label": emotion.get("label"),
-                    "confidence": round(confidence, 4),
-                    "reliability": emotion.get("reliability"),
-                    "probabilities": {
-                        name: round(float(value), 4)
-                        for name, value in probabilities.items()
-                    },
-                })
-
-                probability_rows.append({
-                    name: float(value)
-                    for name, value in probabilities.items()
-                })
-                confidences.append(confidence)
-
-            frame_index += 1
-
-        if not timeline:
-            return {
-                "status": "completed",
-                "duration_seconds": round(duration, 2),
-                "sampled_frames_with_face": sampled_with_face,
-                "timeline": [],
-                "summary": None,
-                "message": "No ready temporal predictions were produced.",
-            }
-
-        classes = runtime.emotion_detector.get_state()["classes"]
-        averages = {
-            name: float(np.mean([row.get(name, 0.0) for row in probability_rows]))
-            for name in classes
-        }
-
-        dominant = max(averages, key=averages.get)
-
-        return {
-            "status": "completed",
-            "duration_seconds": round(duration, 2),
-            "sampled_frames_with_face": sampled_with_face,
-            "timeline": timeline,
-            "summary": {
-                "dominant_expression": dominant,
-                "average_confidence": round(float(np.mean(confidences)), 4),
-                "average_probabilities": {
-                    name: round(value, 4)
-                    for name, value in averages.items()
-                },
-            },
-            "message": "Video analysis complete.",
-        }
+        import asyncio
+        return await asyncio.to_thread(_analyze_video_path, temp_path)
 
     finally:
-        capture.release()
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass
+        if temp_path is not None:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+        await video.close()
