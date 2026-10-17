@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: facialemotionai-web
+    runtime: python
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: bash render_build.sh
+    startCommand: uvicorn webapp.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
