@@ -1,6 +1,6 @@
-# FacialEmotionAI FastAPI + ngrok MVP
+# FacialEmotionAI FastAPI Web Demo
 
-This folder exposes the existing local FacialEmotionAI model stack through a lightweight FastAPI web interface.
+This folder exposes the existing FacialEmotionAI model stack through a web interface.
 
 ## Features
 
@@ -14,9 +14,25 @@ This folder exposes the existing local FacialEmotionAI model stack through a lig
 - CSV export
 - Print / Save as PDF reporting
 
-## 1. Install the web dependencies
+## Deploy on Render
 
-From the repository root in PowerShell:
+The repository includes a root-level `render.yaml` Blueprint and a build script.
+
+1. Open Render and sign in with GitHub.
+2. Choose **New + → Blueprint**.
+3. Connect `https://github.com/arianharashchi-lang/FacialEmotionAI`.
+4. Select branch `main` and let Render read `render.yaml`.
+5. Review the service settings and create the Blueprint.
+6. Watch the build and deploy logs. The build script installs Git LFS, downloads the model artifacts, verifies that they are real model files rather than LFS pointer text, and installs the web dependencies.
+7. Open the generated `onrender.com` URL and test `/health`, then click **Load AI Engine**.
+
+The Blueprint uses Render's free plan. Free instances have limited CPU/RAM and sleep after inactivity. TensorFlow model loading or inference can exceed free-instance resources; if logs show an out-of-memory termination, this app will need a higher-memory host or a more lightweight inference setup.
+
+The web runtime shares one model stack and is intended as a research/portfolio demo, not a multi-user production service. Uploaded videos are processed temporarily and deleted after analysis. Free Render storage is ephemeral, so do not use the service to store persistent reports or databases.
+
+## Local run
+
+Install dependencies from the repository root:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -24,50 +40,14 @@ pip install -r requirements.txt
 pip install -r webapp\requirements.txt
 ```
 
-## 2. Start FastAPI
+Start FastAPI:
 
 ```powershell
 uvicorn webapp.app:app --host 0.0.0.0 --port 8000
 ```
 
-Local address:
-
-```text
-http://127.0.0.1:8000
-```
-
-Keep this terminal open.
-
-## 3. Install ngrok on Windows
-
-Recommended Windows command:
-
-```powershell
-winget install ngrok -s msstore
-```
-
-Create a free ngrok account and copy the account authtoken, then run:
-
-```powershell
-ngrok config add-authtoken YOUR_AUTHTOKEN
-```
-
-## 4. Publish the local FastAPI app
-
-In a second PowerShell window:
-
-```powershell
-ngrok http 8000
-```
-
-Open the HTTPS ngrok address from a phone, tablet, or another computer.
-
-Free ngrok accounts receive an assigned development domain. The local laptop still performs TensorFlow/OpenCV inference, so FastAPI and ngrok must both stay running.
+Open `http://127.0.0.1:8000` and keep the terminal running.
 
 ## Scope
 
 FacialEmotionAI estimates visible facial-expression categories. It does not infer internal psychological state and is not a clinical, hiring, lie-detection, or diagnostic system.
-
-## MVP concurrency
-
-The current web runtime intentionally shares one loaded TensorFlow model stack. Treat this version as a one-active-analysis-session demo. Multi-user production deployment would require isolated session state and dedicated inference workers.
