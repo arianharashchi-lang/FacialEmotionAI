@@ -261,7 +261,7 @@ else:
         st.subheader("Analyze a video")
         uploaded_video = st.file_uploader(
             "Choose a video or record one from your webcam",
-            type=sorted(ALLOWED_VIDEO_SUFFIXES - {".m4v"}),
+            type=sorted(suffix.lstrip(".") for suffix in ALLOWED_VIDEO_SUFFIXES),
             help="Maximum 100 MB and 5 minutes. Videos are processed temporarily and not saved as a user library.",
         )
 
