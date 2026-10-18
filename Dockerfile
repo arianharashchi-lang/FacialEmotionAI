@@ -11,8 +11,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git git-lfs ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the application source. GitHub source archives may contain LFS pointer files,
-# so fetch the real model artifacts from the public repository during the image build.
+# GitHub source archives may contain LFS pointer files, so fetch the real models.
 COPY . /app
 
 RUN git lfs install --system \
@@ -20,25 +19,14 @@ RUN git lfs install --system \
     && git -C /tmp/facialemotionai-models lfs pull \
     && mkdir -p /app/models \
     && cp -a /tmp/facialemotionai-models/models/. /app/models/ \
-    && python - <<'PY'
-from pathlib import Path
-
-required = (
-    "cnn_feature_extractor.keras",
-    "fake_discriminator.keras",
-    "lstm_attention_v1_best.keras",
-    "sad_neutral_adapter.keras",
-)
-for name in required:
-    path = Path("/app/models") / name
-    if not path.is_file():
-        raise SystemExit(f"Required model is missing: {path}")
-    with path.open("rb") as f:
-        header = f.read(128)
-    if b"git-lfs.github.com/spec/v1" in header or path.stat().st_size < 100_000:
-        raise SystemExit(f"{path} is an LFS pointer or unexpectedly small")
-    print(f"Verified {path.name}: {path.stat().st_size:,} bytes")
-PY
+    && for name in cnn_feature_extractor.keras fake_discriminator.keras lstm_attention_v1_best.keras sad_neutral_adapter.keras; do \
+         test -s "/app/models/$name" \
+         && ! grep -aq "git-lfs.github.com/spec/v1" "/app/models/$name" \
+         && size="$(stat -c%s "/app/models/$name")" \
+         && test "$size" -ge 100000 \
+         && echo "Verified $name ($size bytes)"; \
+       done \
+    && rm -rf /tmp/facialemotionai-models
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir -r requirements-render.txt
