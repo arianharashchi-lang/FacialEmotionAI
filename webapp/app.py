@@ -13,8 +13,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from emotion_detector_5class import EmotionDetector5Class
-from fake_detector import FakeDetector
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -29,6 +27,11 @@ class ModelRuntime:
     """Single-user MVP runtime that reuses one loaded model stack."""
 
     def __init__(self) -> None:
+        # Defer TensorFlow and model imports until a user explicitly loads the AI
+        # engine. This lets the homepage and /health start on low-memory hosts.
+        from emotion_detector_5class import EmotionDetector5Class
+        from fake_detector import FakeDetector
+
         cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.face_detector = cv2.CascadeClassifier(cascade_path)
         if self.face_detector.empty():
