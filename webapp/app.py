@@ -217,7 +217,10 @@ async def analyze_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
         await frame.close()
 
 
-def _analyze_video_path(temp_path: str) -> dict[str, Any]:
+def _analyze_video_path(
+    temp_path: str,
+    runtime_override: ModelRuntime | None = None,
+) -> dict[str, Any]:
     capture = cv2.VideoCapture(temp_path)
 
     try:
@@ -240,7 +243,7 @@ def _analyze_video_path(temp_path: str) -> dict[str, Any]:
                 detail="Maximum video length is 5 minutes.",
             )
 
-        runtime = get_runtime()
+        runtime = runtime_override or get_runtime()
         with runtime.lock:
             runtime.reset()
 
