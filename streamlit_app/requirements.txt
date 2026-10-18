@@ -1,0 +1,9 @@
+# Dependencies for the Streamlit Community Cloud demo
+streamlit>=1.40,<2
+streamlit-webrtc>=0.47,<1
+av>=12,<16
+tensorflow-cpu>=2.11,<2.21
+opencv-python-headless>=4.8,<5
+numpy>=1.24,<2.3
+fastapi>=0.115,<1
+python-multipart>=0.0.9,<1
