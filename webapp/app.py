@@ -10,6 +10,7 @@ from typing import Any
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -146,6 +147,15 @@ def decode_image(data: bytes) -> np.ndarray:
 app = FastAPI(
     title="FacialEmotionAI Web Demo",
     version="0.1.0",
+)
+
+# Allow the GitHub Pages frontend to call this inference API cross-origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://arianharashchi-lang.github.io"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
