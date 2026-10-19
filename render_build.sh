@@ -6,7 +6,23 @@ python -m pip install --upgrade pip
 # Render's native runtime includes Git but may not include Git LFS.
 if ! command -v git-lfs >/dev/null 2>&1; then
   mkdir -p "$HOME/.local/bin" /tmp/git-lfs-dist
-  curl -fsSL "https://api.github.com/repos/git-lfs/git-lfs/releases/latest" \
+  # Install a pinned Git LFS release without querying the GitHub API.
+if ! command -v git-lfs >/dev/null 2>&1; then
+  mkdir -p "$HOME/.local/bin" /tmp/git-lfs-dist
+
+  LFS_URL="https://github.com/git-lfs/git-lfs/releases/download/v3.7.1/git-lfs-linux-amd64-v3.7.1.tar.gz"
+
+  curl -fL --retry 3 --retry-delay 2 \
+    "$LFS_URL" -o /tmp/git-lfs.tar.gz
+
+  tar -xzf /tmp/git-lfs.tar.gz -C /tmp/git-lfs-dist
+
+  LFS_BIN="$(find /tmp/git-lfs-dist -type f -name git-lfs -perm -u+x | head -n 1)"
+  test -n "$LFS_BIN"
+
+  install -m 755 "$LFS_BIN" "$HOME/.local/bin/git-lfs"
+  export PATH="$HOME/.local/bin:$PATH"
+fi
     -o /tmp/git-lfs-release.json
 
   LFS_URL="$(python -c 'import json; d=json.load(open("/tmp/git-lfs-release.json", encoding="utf-8")); print(next(a["browser_download_url"] for a in d["assets"] if a["name"].startswith("git-lfs-linux-amd64-") and a["name"].endswith(".tar.gz")))' )"
