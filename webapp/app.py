@@ -255,6 +255,7 @@ def _analyze_video_path(
             sampled_frames_total = 0
             accepted_by_anti_spoof = 0
             rejected_as_fake = 0
+            anti_spoof_real_probabilities = []
             max_emotion_samples = 0
             temporal_predictions = 0
             stride = max(1, int(round(fps / 8.0)))
@@ -274,6 +275,9 @@ def _analyze_video_path(
                 if result.get("face_detected"):
                     sampled_with_face += 1
                     anti_spoof = result.get("anti_spoof") or {}
+                    real_probability = anti_spoof.get("real_probability")
+                    if real_probability is not None:
+                        anti_spoof_real_probabilities.append(float(real_probability))
                     if anti_spoof.get("status") == "FAKE":
                         rejected_as_fake += 1
                     else:
@@ -312,6 +316,19 @@ def _analyze_video_path(
                 "sampled_frames_with_face": sampled_with_face,
                 "frames_accepted_by_anti_spoof": accepted_by_anti_spoof,
                 "frames_rejected_as_fake": rejected_as_fake,
+                "anti_spoof_real_probability_min": (
+                    round(min(anti_spoof_real_probabilities), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_probability_mean": (
+                    round(float(np.mean(anti_spoof_real_probabilities)), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_probability_max": (
+                    round(max(anti_spoof_real_probabilities), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_threshold": runtime.fake_detector.real_threshold,
                 "max_emotion_samples_collected": max_emotion_samples,
                 "required_emotion_samples": 20,
                 "temporal_predictions": temporal_predictions,
