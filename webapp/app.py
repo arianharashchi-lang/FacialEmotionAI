@@ -252,6 +252,11 @@ def _analyze_video_path(
             confidences = []
             frame_index = 0
             sampled_with_face = 0
+            sampled_frames_total = 0
+            accepted_by_anti_spoof = 0
+            rejected_as_fake = 0
+            max_emotion_samples = 0
+            temporal_predictions = 0
             stride = max(1, int(round(fps / 8.0)))
 
             while True:
@@ -263,13 +268,23 @@ def _analyze_video_path(
                     frame_index += 1
                     continue
 
+                sampled_frames_total += 1
                 result = runtime.analyze(frame, force_sample=True)
 
                 if result.get("face_detected"):
                     sampled_with_face += 1
+                    anti_spoof = result.get("anti_spoof") or {}
+                    if anti_spoof.get("status") == "FAKE":
+                        rejected_as_fake += 1
+                    else:
+                        accepted_by_anti_spoof += 1
 
                 emotion = result.get("emotion") or {}
+                collected = int(emotion.get("collected") or 0)
+                max_emotion_samples = max(max_emotion_samples, collected)
+
                 if emotion.get("ready") and emotion.get("label"):
+                    temporal_predictions += 1
                     probabilities = emotion.get("probabilities") or {}
                     confidence = float(emotion.get("confidence") or 0.0)
 
@@ -292,14 +307,34 @@ def _analyze_video_path(
 
                 frame_index += 1
 
+            diagnostics = {
+                "sampled_frames_total": sampled_frames_total,
+                "sampled_frames_with_face": sampled_with_face,
+                "frames_accepted_by_anti_spoof": accepted_by_anti_spoof,
+                "frames_rejected_as_fake": rejected_as_fake,
+                "max_emotion_samples_collected": max_emotion_samples,
+                "required_emotion_samples": 20,
+                "temporal_predictions": temporal_predictions,
+            }
+
             if not timeline:
+                if max_emotion_samples < 20:
+                    message = (
+                        "Not enough emotion samples collected: "
+                        f"{max_emotion_samples}/20. Check face detection and anti-spoof results."
+                    )
+                else:
+                    message = (
+                        "The 20-sample sequence was reached, but no temporal "
+                        "prediction with a label was produced."
+                    )
                 return {
                     "status": "completed",
                     "duration_seconds": round(duration, 2),
-                    "sampled_frames_with_face": sampled_with_face,
+                    **diagnostics,
                     "timeline": [],
                     "summary": None,
-                    "message": "No ready temporal predictions were produced.",
+                    "message": message,
                 }
 
             classes = runtime.emotion_detector.get_state()["classes"]
@@ -314,7 +349,7 @@ def _analyze_video_path(
             return {
                 "status": "completed",
                 "duration_seconds": round(duration, 2),
-                "sampled_frames_with_face": sampled_with_face,
+                **diagnostics,
                 "timeline": timeline,
                 "summary": {
                     "dominant_expression": dominant,
