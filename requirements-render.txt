@@ -1,7 +1,7 @@
 # Runtime dependencies for the hosted FastAPI demo.
 # CPU-only TensorFlow and headless OpenCV suit a Linux web service.
 tensorflow-cpu>=2.11
-opencv-python-headless>=4.8
+opencv-python-headless==4.11.0.86
 numpy>=1.24,<2.3
 fastapi>=0.115
 uvicorn[standard]>=0.30
