@@ -91,12 +91,21 @@ class ModelRuntime:
 
             anti_spoof = self.fake_detector.predict(face)
 
-            if anti_spoof.get("status") == "FAKE":
+            # Fail closed: only an explicit REAL result may enter the emotion model.
+            # An unavailable or unknown anti-spoof result must never bypass this gate.
+            if anti_spoof.get("status") != "REAL":
+                status = anti_spoof.get("status", "UNKNOWN")
+                if status == "FAKE":
+                    message = "Frame rejected by anti-spoofing gate."
+                elif status == "MODEL_NOT_TRAINED":
+                    message = "Anti-spoof model is unavailable; frame was not accepted."
+                else:
+                    message = "Anti-spoof result was inconclusive; frame was not accepted."
                 return {
                     "face_detected": True,
                     "face_box": [x1, y1, x2 - x1, y2 - y1],
                     "anti_spoof": anti_spoof,
-                    "message": "Frame rejected by anti-spoofing gate.",
+                    "message": message,
                     "emotion": self.emotion_detector.get_state(),
                 }
 
@@ -193,7 +202,12 @@ def reset_engine() -> dict[str, str]:
 
 
 @app.post("/api/frame")
-async def analyze_frame(frame: UploadFile = File(...)) -> dict[str, Any]:
+async def analyze_frame(
+    frame: UploadFile = File(
+        ...,
+        description="Image file containing one frame, maximum 10 MB.",
+    )
+) -> dict[str, Any]:
     try:
         image_bytes = await frame.read(MAX_FRAME_UPLOAD_BYTES + 1)
 
@@ -255,6 +269,8 @@ def _analyze_video_path(
             sampled_frames_total = 0
             accepted_by_anti_spoof = 0
             rejected_as_fake = 0
+            blocked_by_anti_spoof = 0
+            anti_spoof_real_probabilities = []
             max_emotion_samples = 0
             temporal_predictions = 0
             stride = max(1, int(round(fps / 8.0)))
@@ -274,10 +290,16 @@ def _analyze_video_path(
                 if result.get("face_detected"):
                     sampled_with_face += 1
                     anti_spoof = result.get("anti_spoof") or {}
-                    if anti_spoof.get("status") == "FAKE":
+                    real_probability = anti_spoof.get("real_probability")
+                    if real_probability is not None:
+                        anti_spoof_real_probabilities.append(float(real_probability))
+                    status = anti_spoof.get("status")
+                    if status == "REAL":
+                        accepted_by_anti_spoof += 1
+                    elif status == "FAKE":
                         rejected_as_fake += 1
                     else:
-                        accepted_by_anti_spoof += 1
+                        blocked_by_anti_spoof += 1
 
                 emotion = result.get("emotion") or {}
                 collected = int(emotion.get("collected") or 0)
@@ -312,6 +334,20 @@ def _analyze_video_path(
                 "sampled_frames_with_face": sampled_with_face,
                 "frames_accepted_by_anti_spoof": accepted_by_anti_spoof,
                 "frames_rejected_as_fake": rejected_as_fake,
+                "frames_blocked_by_anti_spoof": blocked_by_anti_spoof,
+                "anti_spoof_real_probability_min": (
+                    round(min(anti_spoof_real_probabilities), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_probability_mean": (
+                    round(float(np.mean(anti_spoof_real_probabilities)), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_probability_max": (
+                    round(max(anti_spoof_real_probabilities), 4)
+                    if anti_spoof_real_probabilities else None
+                ),
+                "anti_spoof_real_threshold": runtime.fake_detector.real_threshold,
                 "max_emotion_samples_collected": max_emotion_samples,
                 "required_emotion_samples": 20,
                 "temporal_predictions": temporal_predictions,
@@ -368,7 +404,12 @@ def _analyze_video_path(
 
 
 @app.post("/api/video")
-async def analyze_video(video: UploadFile = File(...)) -> dict[str, Any]:
+async def analyze_video(
+    video: UploadFile = File(
+        ...,
+        description="Video file (.mp4, .mov, .avi, .mkv, .webm, .m4v), maximum 100 MB.",
+    )
+) -> dict[str, Any]:
     suffix = Path(video.filename or "upload.mp4").suffix.lower()
     allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 
@@ -397,6 +438,12 @@ async def analyze_video(video: UploadFile = File(...)) -> dict[str, Any]:
                     )
 
                 tmp.write(chunk)
+
+        if uploaded_bytes == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded video is empty.",
+            )
 
         import asyncio
         return await asyncio.to_thread(_analyze_video_path, temp_path)
