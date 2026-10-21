@@ -8,6 +8,12 @@
 
 **FacialEmotionAI** is an end-to-end **real-time facial emotion recognition** system for webcam video. It combines spoof screening, MobileNetV2 frame features, BiLSTM + Temporal Attention, and a five-class live runtime: **Angry, Happy, Surprise, Sad, Neutral**.
 
+## Live Web App
+
+**Try FacialEmotionAI:** https://facialemotionai-web.onrender.com
+
+> **Mobile-only web app:** This demo is designed for use on a mobile phone. Please open it on your phone for the intended experience; desktop and laptop use are not supported.
+
 **Why it is different:** instead of classifying isolated frames only, the runtime models a rolling **20-frame temporal sequence** and places a **Real/Fake discriminator gate** before emotion inference. The repository also includes reproducible benchmarks, CI-tested inference logic, privacy-conscious data handling, and the full training pipeline.
 
 **At a glance**
