@@ -12,6 +12,8 @@
 
 **Try FacialEmotionAI:** https://facialemotionai-web.onrender.com
 
+> **Recommended input:** For the most reliable results with this demo, use the live webcam instead of uploading a video. Keep your face clearly visible, look toward the camera, and use steady, well-lit conditions. Results may vary with lighting, camera quality, and facial pose.
+
 > **Mobile-only web app:** This demo is designed for use on a mobile phone. Please open it on your phone for the intended experience; desktop and laptop use are not supported.
 >
 > **VPN recommended:** If the web app does not load on your phone, try connecting to a VPN and opening the link again.
