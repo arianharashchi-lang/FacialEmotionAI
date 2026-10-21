@@ -1,5 +1,18 @@
 # Release Notes
 
+## Unreleased — Multilingual web interface
+
+### Web demo
+- Added a language selector for 12 interface languages: English, Persian, Arabic, Spanish, French, German, Chinese, Japanese, Portuguese, Hindi, Turkish, and Russian.
+- English is selected by default on every visit.
+- Language choice is session-only and is not persisted for future visits.
+- Persian and Arabic use right-to-left layout; other languages use left-to-right layout.
+- Translated interface labels, status messages, and emotion names.
+
+### Compatibility
+- No intended changes to the trained emotion models or inference API.
+
+
 ## v1.0.0 — First stable portfolio release
 
 ### Runtime
