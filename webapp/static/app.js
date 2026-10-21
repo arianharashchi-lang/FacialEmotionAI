@@ -3,15 +3,22 @@ const overlay = document.getElementById("overlay");
 const statusText = document.getElementById("status");
 let stream = null;
 let facingMode = "user";
+const tr = (key) => window.FacialEmotionI18n ? window.FacialEmotionI18n.t(key) : key;
+const emotionName = (name) => {
+  const keys = ["angry", "happy", "surprise", "sad", "neutral"];
+  const i = keys.indexOf(String(name || "").toLowerCase());
+  const d = window.FacialEmotionI18n?.languages[document.getElementById("languageSelect")?.value || "en"];
+  return i >= 0 ? (d?.classes?.[i] || ["Angry", "Happy", "Surprise", "Sad", "Neutral"][i]) : (name || "—");
+};
 
 async function loadEngine() {
-  statusText.textContent = "Loading AI engine...";
+  statusText.textContent = tr("loading");
   const response = await fetch("/api/start", { method: "POST" });
   if (!response.ok) {
-    statusText.textContent = "Engine failed to load.";
+    statusText.textContent = tr("failed");
     return false;
   }
-  statusText.textContent = "AI engine ready.";
+  statusText.textContent = tr("ready");
   return true;
 }
 
@@ -28,7 +35,7 @@ async function startCamera() {
   });
 
   video.srcObject = stream;
-  overlay.textContent = "Camera ready. Live inference client will be enabled after local connectivity testing.";
+  overlay.textContent = tr("cameraReady");
 }
 
 function stopCamera() {
@@ -37,7 +44,7 @@ function stopCamera() {
     stream = null;
   }
   video.srcObject = null;
-  overlay.textContent = "Camera is off";
+  overlay.textContent = tr("cameraOff");
 }
 
 document.getElementById("load").addEventListener("click", loadEngine);
@@ -67,7 +74,7 @@ function renderBars(probabilities = {}) {
   bars.innerHTML = classes.map((name) => {
     const value = Number(probabilities[name] || 0);
     return '<div class="bar">' +
-      '<div class="bar-head"><span>' + name + '</span><span>' + pct(value) + '%</span></div>' +
+      '<div class="bar-head"><span>' + emotionName(name) + '</span><span>' + pct(value) + '%</span></div>' +
       '<div class="track"><div class="fill" style="width:' + pct(value) + '%"></div></div>' +
       '</div>';
   }).join("");
@@ -107,28 +114,28 @@ function updateAnalysis(result) {
   if (!result) return;
 
   if (!result.face_detected) {
-    overlay.textContent = "No face detected";
+    overlay.textContent = tr("noFace");
     return;
   }
 
   const anti = result.anti_spoof || {};
-  spoofText.textContent = "Anti-spoofing: " + (anti.status || "—");
+  spoofText.textContent = tr("spoof") + (anti.status || "—");
 
   if (anti.status === "FAKE") {
-    overlay.textContent = "Frame rejected by anti-spoofing";
+    overlay.textContent = tr("rejected");
     return;
   }
 
   const emotion = result.emotion || {};
   if (!emotion.ready) {
-    overlay.textContent = "Temporal warmup: " +
+    overlay.textContent = tr("warmup") +
       (emotion.collected || 0) + " / " + (emotion.required || 20);
     return;
   }
 
   overlay.textContent = "";
   emotionText.textContent = emotion.label || "—";
-  confidenceText.textContent = pct(emotion.confidence) + "% confidence";
+  confidenceText.textContent = pct(emotion.confidence) + " " + tr("confidence");
   reliabilityText.textContent = emotion.reliability || "—";
   renderBars(emotion.probabilities || {});
 }
@@ -141,7 +148,7 @@ async function analyzeBurst() {
 
   const analyzeButton = document.getElementById("analyze");
   analyzeButton.disabled = true;
-  statusText.textContent = "Collecting a 20-frame temporal sequence...";
+  statusText.textContent = tr("collecting");
 
   await fetch("/api/reset", { method: "POST" });
 
@@ -151,7 +158,7 @@ async function analyzeBurst() {
       updateAnalysis(result);
       await sleep(180);
     }
-    statusText.textContent = "Temporal analysis complete.";
+    statusText.textContent = tr("complete");
   } finally {
     analyzeButton.disabled = false;
   }
@@ -180,20 +187,20 @@ function renderVideoResult(data) {
   box.classList.remove("hidden");
 
   if (!data.summary) {
-    document.getElementById("videoDominant").textContent = "No result";
+    document.getElementById("videoDominant").textContent = tr("noResult");
     document.getElementById("videoConfidence").textContent = "—";
     document.getElementById("timeline").innerHTML = "<p>No ready temporal predictions were produced.</p>";
     return;
   }
 
-  document.getElementById("videoDominant").textContent = data.summary.dominant_expression || "—";
+  document.getElementById("videoDominant").textContent = emotionName(data.summary.dominant_expression);
   document.getElementById("videoConfidence").textContent = pct(data.summary.average_confidence) + "%";
   renderVideoBars(data.summary.average_probabilities || {});
 
   document.getElementById("timeline").innerHTML = (data.timeline || []).map((point) => {
     return '<div class="timeline-row">' +
       '<span>' + Number(point.time).toFixed(1) + 's</span>' +
-      '<strong>' + point.label + '</strong>' +
+      '<strong>' + emotionName(point.label) + '</strong>' +
       '<span>' + pct(point.confidence) + '% • ' + (point.reliability || "—") + '</span>' +
       '</div>';
   }).join("");
@@ -206,7 +213,7 @@ async function analyzeVideoFile() {
   const button = document.getElementById("analyzeVideo");
 
   if (!file) {
-    message.textContent = "Choose a video first.";
+    message.textContent = tr("selectVideo");
     return;
   }
 
@@ -214,7 +221,7 @@ async function analyzeVideoFile() {
 
   stopCamera();
   button.disabled = true;
-  message.textContent = "Analyzing video... keep this page open.";
+  message.textContent = tr("analyzing");
 
   const form = new FormData();
   form.append("video", file);
@@ -224,12 +231,12 @@ async function analyzeVideoFile() {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.detail || "Video analysis failed.");
+      throw new Error(data.detail || tr("failed"));
     }
 
     latestVideoResult = data;
     renderVideoResult(data);
-    message.textContent = data.message || "Analysis complete.";
+    message.textContent = data.message || tr("complete");
   } catch (error) {
     console.error(error);
     message.textContent = error.message;
@@ -270,3 +277,10 @@ function downloadVideoCsv() {
 document.getElementById("analyzeVideo").addEventListener("click", analyzeVideoFile);
 document.getElementById("downloadCsv").addEventListener("click", downloadVideoCsv);
 document.getElementById("printReport").addEventListener("click", () => window.print());
+
+
+// Refresh translated dynamic labels when the language changes.
+document.getElementById("languageSelect")?.addEventListener("change", () => {
+  renderBars({});
+  if (latestVideoResult) renderVideoResult(latestVideoResult);
+});
