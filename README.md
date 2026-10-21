@@ -57,6 +57,16 @@ The hosted web demo includes a language selector with **12 interface languages**
 
 The selected language applies to the current visit only; the app does not save the choice for future visits or automatically select a language from the browser. The interface language changes labels and status messages, while the underlying emotion-recognition model and API remain the same.
 
+## Project Ownership & Contributions
+
+**Project Creator & Lead Developer:** Arian Harashchi
+
+I designed, developed, and implemented the core components of FacialEmotionAI, including the facial emotion recognition pipeline, deep learning models, anti-spoofing integration, video analysis, API, and web application deployment.
+
+**Additional Contribution:** A collaborator contributed to the project's video presentation.
+
+The core architecture, model integration, implementation, testing, and deployment were primarily developed and managed by the project creator.
+
 ## Architecture Video
 
 [![Watch the FacialEmotionAI architecture walkthrough](docs/architecture.png)](https://d2ol7oe51mr4n9.cloudfront.net/user_3K8P0B0phId4N0d4AmHg2YA7msy/64ba4a94-ab30-41b0-ba02-790aad338b3d.mp4)
