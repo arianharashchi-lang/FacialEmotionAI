@@ -13,6 +13,8 @@
 **Try FacialEmotionAI:** https://facialemotionai-web.onrender.com
 
 > **Mobile-only web app:** This demo is designed for use on a mobile phone. Please open it on your phone for the intended experience; desktop and laptop use are not supported.
+>
+> **VPN recommended:** If the web app does not load on your phone, try connecting to a VPN and opening the link again.
 
 **Why it is different:** instead of classifying isolated frames only, the runtime models a rolling **20-frame temporal sequence** and places a **Real/Fake discriminator gate** before emotion inference. The repository also includes reproducible benchmarks, CI-tested inference logic, privacy-conscious data handling, and the full training pipeline.
 
