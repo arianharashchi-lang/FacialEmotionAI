@@ -47,6 +47,16 @@
 - Final model artifacts stored with **Git LFS**.
 - Raw datasets, webcam captures, adaptation samples, and local databases are excluded from Git.
 
+## Multilingual Web Interface
+
+The hosted web demo includes a language selector with **12 interface languages**:
+
+- English (default on every visit)
+- Persian and Arabic (right-to-left layouts)
+- Spanish, French, German, Chinese, Japanese, Portuguese, Hindi, Turkish, and Russian
+
+The selected language applies to the current visit only; the app does not save the choice for future visits or automatically select a language from the browser. The interface language changes labels and status messages, while the underlying emotion-recognition model and API remain the same.
+
 ## Architecture Video
 
 [![Watch the FacialEmotionAI architecture walkthrough](docs/architecture.png)](https://d2ol7oe51mr4n9.cloudfront.net/user_3K8P0B0phId4N0d4AmHg2YA7msy/64ba4a94-ab30-41b0-ba02-790aad338b3d.mp4)
