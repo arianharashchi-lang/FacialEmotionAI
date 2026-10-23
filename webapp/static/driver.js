@@ -59,7 +59,7 @@ function monitoring(result){
  setText("distractionState",distracted?"Warning":"No prolonged head turn");
  setText("monitorState",fatigue||distracted?"Attention required":"Monitoring");
 }
-async function cycle(){if(busy||!stream||!modelsReady)return;busy=true;try{monitoring(await detect());}catch(e){setStatus("Tracking error: "+e.message);}finally{busy=false;}}
+async function cycle(){if(busy||!stream||!modelsReady)return;busy=true;try{monitoring(await detect());}catch(e){monitoring(null);setStatus("Tracking error: "+e.message);}finally{busy=false;}}
 async function start(){
  try{
  if(!secureContext())throw Error("Camera API unavailable. Use HTTPS/localhost and a supported browser.");
@@ -75,6 +75,7 @@ async function start(){
 function stop(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
+ if(!stream){setText("enrollStatus","Start camera first.");return;}
  if(pin.length<6){setText("enrollStatus","Use at least 6 characters for this session PIN.");return;}
  setText("enrollStatus","Capturing face...");
  try{if(!stream)throw Error("Start camera first.");
