@@ -6,6 +6,9 @@ let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClose
 let previousFatigue=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
 const metrics=new window.DriverFatigueMetrics();
+let lastInferenceAt=null,framesAnalyzed=0,trackingErrors=0,startingCamera=false;
+function diagnostic(message){setText("diagnosticState",message);}
+function resetDiagnostics(){lastInferenceAt=null;framesAnalyzed=0;trackingErrors=0;setText("sampleState","0");setText("trackingErrors","0");diagnostic("Camera not started");}
 function logEvent(message){
  alertHistory.unshift({time:new Date().toLocaleTimeString(),message});
  if(alertHistory.length>25)alertHistory.pop();
@@ -91,20 +94,46 @@ function monitoring(result){
  setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
  setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
 }
-async function cycle(){if(busy||!stream||!modelsReady)return;busy=true;try{monitoring(await detect());}catch(e){monitoring(null);setStatus("Tracking error: "+e.message);}finally{busy=false;}}
+async function cycle(){
+ if(busy||!stream||!modelsReady)return;
+ busy=true;
+ try{
+  const result=await detect();
+  const time=performance.now();
+  if(lastInferenceAt!==null&&time-lastInferenceAt>2000){
+   metrics.reset();
+   previousFatigue=previousDistraction=previousYawn=false;
+  }
+  lastInferenceAt=time;framesAnalyzed++;
+  setText("sampleState",String(framesAnalyzed));
+  monitoring(result);
+  diagnostic(result?"Tracking active":"No face detected — move into view");
+ }catch(e){
+  trackingErrors++;setText("trackingErrors",String(trackingErrors));
+  monitoring(null);diagnostic("Tracking interrupted");
+  setStatus("Tracking error: "+e.message);
+ }finally{busy=false;}
+}
 async function start(){
+ if(startingCamera||stream)return;
+ startingCamera=true;
+ $("cameraStart").disabled=true;
  try{
  if(!secureContext())throw Error("Camera API unavailable. Use HTTPS/localhost and a supported browser.");
  setStatus("Requesting camera...");
  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:"user"}});
+ const track=stream.getVideoTracks()[0];
+ if(track){track.addEventListener("ended",()=>{stop();setStatus("Camera disconnected or permission revoked.");diagnostic("Camera disconnected");});
+  const settings=track.getSettings();setText("cameraDetails",[settings.width,settings.height].every(Boolean)?settings.width+" × "+settings.height:"Camera active");}
  video.srcObject=stream;await video.play();
  setText("cameraMessage","Camera on");setStatus("Loading face models... first run requires a network connection.");
  await loadModels();setStatus("Models ready. Enroll an authorized driver or monitor facial cues.");
  $("enroll").disabled=false;$("verify").disabled=false;
- clearInterval(timer);timer=setInterval(cycle,650);
- }catch(e){setStatus("Could not start: "+e.message);stop();}
+ clearInterval(timer);timer=setInterval(cycle,650);diagnostic("Camera ready — tracking starting");
+ }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
+ }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
