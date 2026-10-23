@@ -36,3 +36,11 @@ test("PERCLOS only appears after at least 10 seconds of observed data",()=>{
  assert.ok(r.perclos!==null);assert.ok(r.perclos>0.35&&r.perclos<0.55);
  assert.equal(r.elevatedClosure,true);
 });
+
+test("fast consecutive eye samples register a short 80 ms blink",()=>{
+ const m=new DriverFatigueMetrics();
+ m.update({time:0,eyeClosed:false,headAway:false,yawning:false});
+ m.update({time:100,eyeClosed:true,headAway:false,yawning:false});
+ const r=m.update({time:180,eyeClosed:false,headAway:false,yawning:false});
+ assert.equal(r.blinks,1);
+});

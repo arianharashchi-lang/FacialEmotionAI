@@ -94,10 +94,52 @@ async function scanPhone(time){
 }
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
-let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false;
+let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
+let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false;
+function showEyeSignal(signal,closed){
+ setText("blinkState",String(signal.blinks));
+ setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
+ setText("eyeState",closed?"Likely closed":"Open");
+ setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
+ setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
+ setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
+ if(signal.fatigue&&!previousFatigue){recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
+ if(signal.distraction&&!previousDistraction){recordEvent("head","Prolonged head turn");alertSound();}
+ if(signal.prolongedYawn&&!previousYawn){recordEvent("yawn","Possible yawn");}
+ previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
+}
+function observeFastEyes(points,now){
+ if(!points||points.length<468){
+  if(lastFastEyeAt!==null&&now-lastFastEyeAt>900){
+   metrics.reset();previousFatigue=previousDistraction=previousYawn=false;
+   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState","0");
+   setText("eyeSampleState","Tracking lost");lastFastEyeAt=null;
+  }
+  return;
+ }
+ // MediaPipe 468-point Face Mesh EAR, independent of identity recognition.
+ const left=ear([33,160,158,133,153,144].map(i=>points[i]));
+ const right=ear([362,385,387,263,373,380].map(i=>points[i]));
+ const ratio=(left+right)/2;
+ if(!Number.isFinite(ratio)||ratio<0||ratio>1)return;
+ const closed=ratio<.20; // Provisional threshold; calibration still required.
+ const signal=metrics.update({time:now,eyeClosed:closed,headAway:latestHeadAway,yawning:latestYawning});
+ lastFastEyeAt=now;eyeSamples++;
+ setText("eyeSampleState",String(eyeSamples));
+ showEyeSignal(signal,closed);
+}
+async function fastEyeCycle(){
+ if(!irisReady||irisPending||!stream||video.readyState<2)return;
+ irisPending=true;
+ try{await irisMesh.send({image:video});}
+ catch(e){irisReady=false;metrics.reset();setText("eyeSampleState","Iris model error");setStatus("Fast eye tracking unavailable. Slow fallback active: "+e.message);}
+ finally{irisPending=false;}
+}
 function updateGaze(result){
  const p=result&&result.multiFaceLandmarks&&result.multiFaceLandmarks.length===1?result.multiFaceLandmarks[0]:null;
- const output=gazeTracker.update({time:performance.now(),points:p,headAway:$("headState").textContent==="Turned away",eyesClosed:$("eyeState").textContent==="Likely closed"});
+ const now=performance.now();
+ observeFastEyes(p,now);
+ const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
  setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
  if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");alertSound();}
@@ -175,32 +217,27 @@ function ear(points){return (distance(points[1],points[5])+distance(points[2],po
 function monitoring(result){
  setText("faceState",result?"Detected":"Not detected");
  if(!result){
-  metrics.reset();resetGaze();
-  ["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));
-  setText("perclosState","Collecting data");
-  setText("blinkState","0");
-  previousFatigue=previousDistraction=previousYawn=false;
-  setText("monitorState","Tracking lost");return;
+  if(!irisReady){
+   metrics.reset();previousFatigue=previousDistraction=previousYawn=false;
+   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState","0");
+  }
+  setText("yawnState","Unknown");setText("headState","Unknown");
+  setText("monitorState","Tracking lost");
+  return;
  }
  const p=result.landmarks.positions;
- const e=(ear(p.slice(36,42))+ear(p.slice(42,48)))/2;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
- const offset=(p[30].x-eyeCenter)/Math.max(1,eyeWidth);
- const closed=e<.21,yawning=mouth>.45,away=Math.abs(offset)>.25;
- const signal=metrics.update({time:performance.now(),eyeClosed:closed,headAway:away,yawning});
- setText("blinkState",String(signal.blinks));
- setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
- if(signal.fatigue&&!previousFatigue){recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
- if(signal.distraction&&!previousDistraction){recordEvent("head","Prolonged head turn");alertSound();}
- if(signal.prolongedYawn&&!previousYawn){recordEvent("yawn","Possible yawn");}
- previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
- setText("eyeState",closed?"Likely closed":"Open");
- setText("yawnState",yawning?"Mouth open":"No cue");
- setText("headState",away?"Turned away":"Centered");
- setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
- setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
- setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
+ latestYawning=mouth>.45;latestHeadAway=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth))>.25;
+ setText("yawnState",latestYawning?"Mouth open":"No cue");
+ setText("headState",latestHeadAway?"Turned away":"Centered");
+ if(!irisReady){
+  // Reduced-accuracy fallback when the fast mesh cannot load.
+  const closed=(ear(p.slice(36,42))+ear(p.slice(42,48)))/2<.21;
+  const signal=metrics.update({time:performance.now(),eyeClosed:closed,headAway:latestHeadAway,yawning:latestYawning});
+  showEyeSignal(signal,closed);
+  setText("eyeSampleState","Slow fallback");
+ }
 }
 async function cycle(){
  if(busy||!stream||!modelsReady)return;
@@ -209,18 +246,11 @@ async function cycle(){
   const result=await detect();
   const time=performance.now();
   if(lastInferenceAt!==null&&time-lastInferenceAt>2000){
-   metrics.reset();
-   previousFatigue=previousDistraction=previousYawn=false;
+   if(!irisReady){metrics.reset();previousFatigue=previousDistraction=previousYawn=false;}
   }
   lastInferenceAt=time;framesAnalyzed++;
   setText("sampleState",String(framesAnalyzed));
   monitoring(result);
-  if(irisReady&&!irisPending&&stream&&time-lastIrisTime>=1100){
-   irisPending=true;lastIrisTime=time;
-   try{await irisMesh.send({image:video});}
-   catch(irisError){resetGaze();setText("gazeState","Model error");setStatus("Iris tracking unavailable: "+irisError.message);irisReady=false;}
-   finally{irisPending=false;}
-  }
   await scanPhone(time);
   diagnostic(result?"Tracking active":"No face detected — move into view");
  }catch(e){
@@ -247,11 +277,13 @@ async function start(){
  catch(irisError){setText("gazeModelState","Unavailable");setStatus("Iris tracking unavailable; basic driver monitoring still works. "+irisError.message);}
  setStatus("Face monitoring ready. Iris detection is experimental and depends on an external model.");
  $("enroll").disabled=false;$("verify").disabled=false;
- clearInterval(timer);timer=setInterval(cycle,650);diagnostic("Camera ready — tracking starting");
+ clearInterval(timer);timer=setInterval(cycle,650);
+ clearInterval(eyeTimer);eyeTimer=setInterval(fastEyeCycle,100);
+ diagnostic("Camera ready — tracking starting");
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearInterval(timer);timer=null;resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
