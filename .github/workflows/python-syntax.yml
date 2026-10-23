@@ -61,5 +61,6 @@ jobs:
           node --check webapp/static/driver.js
           node --check webapp/static/driver-metrics.js
           node --check webapp/static/driver-gaze.js
+          node --check webapp/static/driver-analytics.js
       - name: Run time-based fatigue metric tests
         run: node --test tests/js/*.test.cjs
