@@ -23,7 +23,7 @@
     if(this.eyeStart===null)this.eyeStart=time;
    }else{
     const duration=this.closedStart===null?0:time-this.closedStart;
-    if(this.prevClosed&&duration>=100&&duration<=800)this.blinks++;
+    if(this.prevClosed&&duration>=60&&duration<=800)this.blinks++;
     this.closedStart=null;this.eyeStart=null;
    }
    this.prevClosed=eyeClosed;
