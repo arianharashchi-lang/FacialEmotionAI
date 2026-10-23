@@ -96,6 +96,22 @@ const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
 let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false;
+let eyeOpenBaseline=null,eyeThreshold=null;
+function clearEyeCalibration(){
+ eyeOpenBaseline=null;eyeThreshold=null;
+ setText("eyeRatioState","—");setText("eyeThresholdState","Calibrating");
+}
+function calibrateEyes(ratio){
+ // Collect an approximate open-eye baseline, then detect a substantial drop.
+ // Avoid treating every sample as an open eye; baseline must rise gradually.
+ if(eyeOpenBaseline===null)eyeOpenBaseline=ratio;
+ else if(ratio>eyeOpenBaseline)eyeOpenBaseline=0.92*eyeOpenBaseline+0.08*ratio;
+ else eyeOpenBaseline=0.999*eyeOpenBaseline+0.001*ratio;
+ eyeThreshold=Math.max(.10,Math.min(.30,eyeOpenBaseline*.72));
+ setText("eyeRatioState",ratio.toFixed(3));
+ setText("eyeThresholdState",eyeThreshold.toFixed(3));
+ return ratio<eyeThreshold;
+}
 function showEyeSignal(signal,closed){
  setText("blinkState",String(signal.blinks));
  setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
@@ -111,8 +127,8 @@ function showEyeSignal(signal,closed){
 function observeFastEyes(points,now){
  if(!points||points.length<468){
   if(lastFastEyeAt!==null&&now-lastFastEyeAt>900){
-   metrics.reset();previousFatigue=previousDistraction=previousYawn=false;
-   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState","0");
+   metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;
+   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
    setText("eyeSampleState","Tracking lost");lastFastEyeAt=null;
   }
   return;
@@ -122,7 +138,7 @@ function observeFastEyes(points,now){
  const right=ear([362,385,387,263,373,380].map(i=>points[i]));
  const ratio=(left+right)/2;
  if(!Number.isFinite(ratio)||ratio<0||ratio>1)return;
- const closed=ratio<.20; // Provisional threshold; calibration still required.
+ const closed=calibrateEyes(ratio); // Adaptive research threshold; not clinically validated.
  const signal=metrics.update({time:now,eyeClosed:closed,headAway:latestHeadAway,yawning:latestYawning});
  lastFastEyeAt=now;eyeSamples++;
  setText("eyeSampleState",String(eyeSamples));
@@ -132,7 +148,7 @@ async function fastEyeCycle(){
  if(!irisReady||irisPending||!stream||video.readyState<2)return;
  irisPending=true;
  try{await irisMesh.send({image:video});}
- catch(e){irisReady=false;metrics.reset();setText("eyeSampleState","Iris model error");setStatus("Fast eye tracking unavailable. Slow fallback active: "+e.message);}
+ catch(e){irisReady=false;metrics.resetTracking();setText("eyeSampleState","Iris model error");setStatus("Fast eye tracking unavailable. Slow fallback active: "+e.message);}
  finally{irisPending=false;}
 }
 function updateGaze(result){
@@ -218,8 +234,8 @@ function monitoring(result){
  setText("faceState",result?"Detected":"Not detected");
  if(!result){
   if(!irisReady){
-   metrics.reset();previousFatigue=previousDistraction=previousYawn=false;
-   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState","0");
+   metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;
+   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
   }
   setText("yawnState","Unknown");setText("headState","Unknown");
   setText("monitorState","Tracking lost");
@@ -246,7 +262,7 @@ async function cycle(){
   const result=await detect();
   const time=performance.now();
   if(lastInferenceAt!==null&&time-lastInferenceAt>2000){
-   if(!irisReady){metrics.reset();previousFatigue=previousDistraction=previousYawn=false;}
+   if(!irisReady){metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;}
   }
   lastInferenceAt=time;framesAnalyzed++;
   setText("sampleState",String(framesAnalyzed));
@@ -283,7 +299,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -316,7 +332,7 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);

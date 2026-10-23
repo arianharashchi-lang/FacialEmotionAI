@@ -44,3 +44,13 @@ test("fast consecutive eye samples register a short 80 ms blink",()=>{
  const r=m.update({time:180,eyeClosed:false,headAway:false,yawning:false});
  assert.equal(r.blinks,1);
 });
+
+test("tracking gaps preserve total blink count without inventing a blink",()=>{
+ const m=new DriverFatigueMetrics();
+ m.update({time:0,eyeClosed:false,headAway:false,yawning:false});
+ m.update({time:100,eyeClosed:true,headAway:false,yawning:false});
+ assert.equal(m.update({time:230,eyeClosed:false,headAway:false,yawning:false}).blinks,1);
+ assert.equal(m.update({time:4000,eyeClosed:false,headAway:false,yawning:false}).blinks,1);
+ m.resetTracking();assert.equal(m.blinks,1);
+ m.reset();assert.equal(m.blinks,0);
+});

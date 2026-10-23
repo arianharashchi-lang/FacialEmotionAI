@@ -3,10 +3,11 @@
 (function(root){
  class DriverFatigueMetrics {
   constructor(){this.reset();}
-  reset(){this.last=null;this.eyeStart=null;this.headStart=null;this.yawnStart=null;this.closedStart=null;this.blinks=0;this.samples=[];this.prevClosed=false;this.prevWarning=false;}
+  reset(){this.blinks=0;this.resetTracking();}
+  resetTracking(){this.last=null;this.eyeStart=null;this.headStart=null;this.yawnStart=null;this.closedStart=null;this.samples=[];this.prevClosed=false;this.prevWarning=false;}
   update({time,eyeClosed,headAway,yawning}){
    if(!Number.isFinite(time))throw Error("Timestamp must be finite");
-   if(this.last!==null&&(time<this.last||time-this.last>2000))this.reset();
+   if(this.last!==null&&(time<this.last||time-this.last>2000))this.resetTracking();
    const delta=this.last===null?0:Math.min(time-this.last,1000);
    // Allocate the elapsed interval only when both observations are available.
    if(this.last!==null&&delta>0){
