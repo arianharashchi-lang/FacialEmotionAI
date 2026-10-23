@@ -6,6 +6,27 @@ let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClose
 let previousFatigue=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
 const metrics=new window.DriverFatigueMetrics();
+const gazeTracker=new window.DriverGazeTracker();
+let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false;
+function updateGaze(result){
+ const p=result&&result.multiFaceLandmarks&&result.multiFaceLandmarks.length===1?result.multiFaceLandmarks[0]:null;
+ const output=gazeTracker.update({time:performance.now(),points:p,headAway:$("headState").textContent==="Turned away",eyesClosed:$("eyeState").textContent==="Likely closed"});
+ setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
+ setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
+ if(output.sustainedAway&&!irisWarning){logEvent("Sustained iris shift (experimental)");alertSound();}
+ irisWarning=output.sustainedAway;
+ if(!output.valid)irisWarning=false;
+}
+function resetGaze(){gazeTracker.reset();irisWarning=false;lastIrisTime=0;setText("gazeState","Unknown");setText("gazeAlert","Not available");}
+async function initIris(){
+ if(irisReady)return;
+ if(!window.FaceMesh)throw Error("MediaPipe iris library unavailable");
+ const cdn="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4";
+ const instance=new window.FaceMesh({locateFile:file=>cdn+"/"+file});
+ instance.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:.6,minTrackingConfidence:.6});
+ instance.onResults(updateGaze);
+ irisMesh=instance;irisReady=true;
+}
 let lastInferenceAt=null,framesAnalyzed=0,trackingErrors=0,startingCamera=false;
 function diagnostic(message){setText("diagnosticState",message);}
 function resetDiagnostics(){lastInferenceAt=null;framesAnalyzed=0;trackingErrors=0;setText("sampleState","0");setText("trackingErrors","0");diagnostic("Camera not started");}
@@ -67,7 +88,7 @@ function ear(points){return (distance(points[1],points[5])+distance(points[2],po
 function monitoring(result){
  setText("faceState",result?"Detected":"Not detected");
  if(!result){
-  metrics.reset();
+  metrics.reset();resetGaze();
   ["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));
   setText("perclosState","Collecting data");
   setText("blinkState","0");
@@ -107,6 +128,12 @@ async function cycle(){
   lastInferenceAt=time;framesAnalyzed++;
   setText("sampleState",String(framesAnalyzed));
   monitoring(result);
+  if(irisReady&&!irisPending&&stream&&time-lastIrisTime>=1100){
+   irisPending=true;lastIrisTime=time;
+   try{await irisMesh.send({image:video});}
+   catch(irisError){resetGaze();setText("gazeState","Model error");setStatus("Iris tracking unavailable: "+irisError.message);irisReady=false;}
+   finally{irisPending=false;}
+  }
   diagnostic(result?"Tracking active":"No face detected — move into view");
  }catch(e){
   trackingErrors++;setText("trackingErrors",String(trackingErrors));
@@ -127,13 +154,16 @@ async function start(){
   const settings=track.getSettings();setText("cameraDetails",[settings.width,settings.height].every(Boolean)?settings.width+" × "+settings.height:"Camera active");}
  video.srcObject=stream;await video.play();
  setText("cameraMessage","Camera on");setStatus("Loading face models... first run requires a network connection.");
- await loadModels();setStatus("Models ready. Enroll an authorized driver or monitor facial cues.");
+ await loadModels();
+ try{await initIris();setText("gazeModelState","Iris model initialized");}
+ catch(irisError){setText("gazeModelState","Unavailable");setStatus("Iris tracking unavailable; basic driver monitoring still works. "+irisError.message);}
+ setStatus("Face monitoring ready. Iris detection is experimental and depends on an external model.");
  $("enroll").disabled=false;$("verify").disabled=false;
  clearInterval(timer);timer=setInterval(cycle,650);diagnostic("Camera ready — tracking starting");
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearInterval(timer);timer=null;resetGaze();if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -166,5 +196,5 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 window.addEventListener("pagehide",()=>{stop();descriptor=null;pinHash=null;});
