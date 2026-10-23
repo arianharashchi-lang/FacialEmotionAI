@@ -14,9 +14,9 @@
 <div class="tile"><span>Eye closure</span><strong id="eyeState">—</strong></div>
 <div class="tile"><span>Yawning cue</span><strong id="yawnState">—</strong></div>
 <div class="tile"><span>Head direction</span><strong id="headState">—</strong></div>
-<div class="tile"><span>Fatigue flag</span><strong id="fatigueState">—</strong></div>
+<div class="tile"><span>Blinks (session)</span><strong id="blinkState">0</strong></div><div class="tile"><span>Fatigue flag</span><strong id="fatigueState">—</strong></div>
 <div class="tile"><span>Distraction flag</span><strong id="distractionState">—</strong></div>
-</div><p class="help">Averted eyes without head rotation, phone use, microsleep, internal emotions, and true alertness are NOT reliably assessed by this prototype. If tracking is lost during a simulated drive, the virtual ignition is never switched off automatically.</p></section>
+</div><div class="camera-actions"><button id="audioToggle" class="secondary" type="button">Enable sound alerts</button><button id="resetEvents" class="secondary" type="button">Clear event history</button></div><h3>Session alerts</h3><ol id="eventHistory" aria-live="polite"><li>No alerts yet.</li></ol><p class="help">Averted eyes without head rotation, phone use, microsleep, internal emotions, and true alertness are NOT reliably assessed by this prototype. If tracking is lost during a simulated drive, the virtual ignition is never switched off automatically.</p></section>
 <p id="status" class="status" role="status" aria-live="polite">Click Start camera to load the model.</p>
 </main><script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script><script defer src="/static/driver.js"></script>
 </body></html>
