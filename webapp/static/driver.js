@@ -5,6 +5,57 @@ let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=
 let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
 let previousFatigue=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
+const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneAlertActive=false;
+function recordEvent(type,message){
+ const name=Object.prototype.hasOwnProperty.call(eventCounts,type)?type:"head";
+ eventCounts[name]++;setText("eventCount",String(Object.values(eventCounts).reduce((a,b)=>a+b,0)));
+ setText("lastEvent",message);
+ logEvent(message,name);
+}
+function downloadEvents(){
+ const rows=[["local_time","event_type","description"],...alertHistory.map(e=>[e.time,e.type,e.message])];
+ const safe=v=>'"'+String(v).replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
+ const csv=rows.map(row=>row.map(safe).join(",")).join("\r\n");
+ const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="driver-session-events.csv";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function loadOptionalScript(src){
+ return new Promise((resolve,reject)=>{
+  const el=document.createElement("script");el.src=src;el.async=true;
+  el.onload=resolve;el.onerror=()=>reject(Error("Could not load optional detection library"));
+  document.head.appendChild(el);
+ });
+}
+async function enablePhoneDetection(){
+ if(phoneEnabled)return;
+ $("phoneEnable").disabled=true;setText("phoneState","Loading model...");
+ try{
+  if(!window.tf)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+  if(!window.cocoSsd)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+  if(!window.cocoSsd||!window.tf)throw Error("Object detection libraries unavailable");
+  phoneModel=await cocoSsd.load({base:"lite_mobilenet_v2"});
+  phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
+ }catch(e){setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
+}
+async function scanPhone(time){
+ if(!phoneEnabled||!phoneModel||phoneBusy||!stream||time-phoneLastAt<2600)return;
+ phoneBusy=true;phoneLastAt=time;
+ try{
+  const detections=await phoneModel.detect(video,10,.65);
+  const visible=detections.some(item=>item.class==="cell phone"&&item.score>=.70);
+  if(visible){
+   if(phoneSeenSince===null)phoneSeenSince=time;
+   if(time-phoneSeenSince>=2400&&!phoneAlertActive){
+    recordEvent("phone","Possible phone visible in camera");alertSound();phoneAlertActive=true;
+   }
+   setText("phoneState","Possible phone detected"+(phoneAlertActive?" — warning":""));
+  }else{phoneSeenSince=null;phoneAlertActive=false;setText("phoneState","No phone detected");}
+ }catch(e){setText("phoneState","Detection error: "+e.message);phoneEnabled=false;$("phoneEnable").disabled=false;}
+ finally{phoneBusy=false;}
+}
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false;
@@ -13,7 +64,7 @@ function updateGaze(result){
  const output=gazeTracker.update({time:performance.now(),points:p,headAway:$("headState").textContent==="Turned away",eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
  setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
- if(output.sustainedAway&&!irisWarning){logEvent("Sustained iris shift (experimental)");alertSound();}
+ if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");alertSound();}
  irisWarning=output.sustainedAway;
  if(!output.valid)irisWarning=false;
 }
@@ -30,8 +81,8 @@ async function initIris(){
 let lastInferenceAt=null,framesAnalyzed=0,trackingErrors=0,startingCamera=false;
 function diagnostic(message){setText("diagnosticState",message);}
 function resetDiagnostics(){lastInferenceAt=null;framesAnalyzed=0;trackingErrors=0;setText("sampleState","0");setText("trackingErrors","0");diagnostic("Camera not started");}
-function logEvent(message){
- alertHistory.unshift({time:new Date().toLocaleTimeString(),message});
+function logEvent(message,type="system"){
+ alertHistory.unshift({time:new Date().toLocaleTimeString(),message,type});
  if(alertHistory.length>25)alertHistory.pop();
  const list=$("eventHistory");list.replaceChildren();
  for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
@@ -104,9 +155,9 @@ function monitoring(result){
  const signal=metrics.update({time:performance.now(),eyeClosed:closed,headAway:away,yawning});
  setText("blinkState",String(signal.blinks));
  setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
- if(signal.fatigue&&!previousFatigue){logEvent(signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
- if(signal.distraction&&!previousDistraction){logEvent("Prolonged head turn");alertSound();}
- if(signal.prolongedYawn&&!previousYawn){logEvent("Possible yawn");}
+ if(signal.fatigue&&!previousFatigue){recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
+ if(signal.distraction&&!previousDistraction){recordEvent("head","Prolonged head turn");alertSound();}
+ if(signal.prolongedYawn&&!previousYawn){recordEvent("yawn","Possible yawn");}
  previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
  setText("eyeState",closed?"Likely closed":"Open");
  setText("yawnState",yawning?"Mouth open":"No cue");
@@ -134,6 +185,7 @@ async function cycle(){
    catch(irisError){resetGaze();setText("gazeState","Model error");setStatus("Iris tracking unavailable: "+irisError.message);irisReady=false;}
    finally{irisPending=false;}
   }
+  await scanPhone(time);
   diagnostic(result?"Tracking active":"No face detected — move into view");
  }catch(e){
   trackingErrors++;setText("trackingErrors",String(trackingErrors));
@@ -163,7 +215,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearInterval(timer);timer=null;resetGaze();if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearInterval(timer);timer=null;resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -196,5 +248,7 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
+$("phoneEnable").addEventListener("click",enablePhoneDetection);
+$("downloadEvents").addEventListener("click",downloadEvents);
 window.addEventListener("pagehide",()=>{stop();descriptor=null;pinHash=null;});
