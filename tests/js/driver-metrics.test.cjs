@@ -54,3 +54,11 @@ test("tracking gaps preserve total blink count without inventing a blink",()=>{
  m.resetTracking();assert.equal(m.blinks,1);
  m.reset();assert.equal(m.blinks,0);
 });
+
+test("eye closure duration rises with a sustained closure, resets after opening",()=>{
+ const m=new DriverFatigueMetrics();
+ m.update({time:0,eyeClosed:false,headAway:false,yawning:false});
+ m.update({time:100,eyeClosed:true,headAway:false,yawning:false});
+ assert.equal(m.update({time:1100,eyeClosed:true,headAway:false,yawning:false}).eyeClosureMs,1000);
+ assert.equal(m.update({time:1200,eyeClosed:false,headAway:false,yawning:false}).eyeClosureMs,0);
+});
