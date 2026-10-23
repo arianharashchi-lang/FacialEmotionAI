@@ -46,3 +46,19 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest -q
+
+  javascript-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check driver JavaScript syntax
+        run: |
+          node --check webapp/static/driver.js
+          node --check webapp/static/driver-metrics.js
+      - name: Run time-based fatigue metric tests
+        run: node --test tests/js/*.test.cjs
