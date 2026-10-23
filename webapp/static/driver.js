@@ -97,6 +97,12 @@ const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
 let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false;
 let eyeOpenBaseline=null,eyeThreshold=null;
+const lastWarningAt=Object.create(null);
+function shouldWarn(kind,time,cooldownMs=15000){
+ const previous=lastWarningAt[kind];
+ if(previous!==undefined&&time-previous<cooldownMs)return false;
+ lastWarningAt[kind]=time;return true;
+}
 function clearEyeCalibration(){
  eyeOpenBaseline=null;eyeThreshold=null;
  setText("eyeRatioState","—");setText("eyeThresholdState","Calibrating");
@@ -114,21 +120,24 @@ function calibrateEyes(ratio){
 }
 function showEyeSignal(signal,closed){
  setText("blinkState",String(signal.blinks));
+ setText("closureDurationState",(signal.eyeClosureMs/1000).toFixed(1)+" s");
  setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
  setText("eyeState",closed?"Likely closed":"Open");
  setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
  setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
  setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
- if(signal.fatigue&&!previousFatigue){recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
- if(signal.distraction&&!previousDistraction){recordEvent("head","Prolonged head turn");alertSound();}
- if(signal.prolongedYawn&&!previousYawn){recordEvent("yawn","Possible yawn");}
+ if(signal.fatigue&&!previousFatigue&&shouldWarn("fatigue",performance.now())){
+  recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();
+ }
+ if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertSound();}
+ if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
  previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
 function observeFastEyes(points,now){
  if(!points||points.length<468){
   if(lastFastEyeAt!==null&&now-lastFastEyeAt>900){
    metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;
-   setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
+   setText("eyeState","Unknown");setText("closureDurationState","—");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
    setText("eyeSampleState","Tracking lost");lastFastEyeAt=null;
   }
   return;
@@ -332,7 +341,7 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();Object.keys(lastWarningAt).forEach(k=>delete lastWarningAt[k]);setText("blinkState","0");setText("closureDurationState","0.0 s");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
