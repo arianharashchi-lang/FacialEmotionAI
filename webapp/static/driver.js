@@ -191,33 +191,28 @@ function logEvent(message,type="system"){
  for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
  if(!alertHistory.length){const li=document.createElement("li");li.textContent="No alerts yet.";list.appendChild(li);}
 }
-function alertWakeUp(){
- if(!soundEnabled)return;
- // Use the device's built-in speech engine, with no audio files or network calls.
+function alertWakeUp(force=false){
+ if(!soundEnabled&&!force)return;
  if(!("speechSynthesis" in window)||typeof window.SpeechSynthesisUtterance!=="function"){
-  alertSound();setStatus("Speech unavailable on this browser; playing fallback beep.");return;
+  setStatus("Voice unavailable in this browser. No beep will play. Try a browser with speech synthesis.");
+  return;
  }
  try{
-  const speech=window.speechSynthesis;
-  speech.cancel(); // Avoid queued or overlapping wake-up messages.
-  const message=new window.SpeechSynthesisUtterance("Wake up! Wake up!");
-  message.lang="en-US";message.rate=1.05;message.volume=1;
-  message.onerror=()=>setStatus("Wake-up voice could not play. Check browser speech and phone volume.");
-  speech.speak(message);
- }catch(e){alertSound();setStatus("Speech unavailable: "+e.message);}
+  const synth=window.speechSynthesis;
+  synth.cancel();
+  const speech=new window.SpeechSynthesisUtterance("Wake up! Wake up!");
+  speech.lang="en-US";speech.rate=1;speech.pitch=1;speech.volume=1;
+  const voices=synth.getVoices();
+  const english=voices.find(voice=>voice.lang&&voice.lang.toLowerCase().startsWith("en"));
+  if(english)speech.voice=english;
+  speech.onstart=()=>setStatus("Speaking: Wake up! Wake up!");
+  speech.onerror=(e)=>setStatus("Wake-up voice failed ("+(e.error||"unknown")+"). Check device voice support and volume.");
+  synth.speak(speech);
+  if(synth.paused)synth.resume();
+  setStatus("Wake-up voice requested. If silent, use Test Wake up voice to check browser support.");
+ }catch(e){setStatus("Wake-up voice unavailable: "+e.message);}
 }
-function alertSound(){
- if(!soundEnabled||Date.now()-lastSoundAt<5000)return;
- lastSoundAt=Date.now();
- try{
-  audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const osc=audioContext.createOscillator(),gain=audioContext.createGain();
-  osc.type="sine";osc.frequency.value=880;gain.gain.value=.06;
-  osc.connect(gain);gain.connect(audioContext.destination);
-  osc.start();osc.stop(audioContext.currentTime+.22);
- }catch(e){setStatus("Audio alerts unavailable: "+e.message);}
-}
+function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
 function secureContext(){return window.isSecureContext&&!!navigator.mediaDevices?.getUserMedia;}
@@ -357,6 +352,7 @@ $("audioToggle").addEventListener("click",()=>{
   if(!soundEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
+$("testWakeVoice").addEventListener("click",()=>alertWakeUp(true));
 $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();Object.keys(lastWarningAt).forEach(k=>delete lastWarningAt[k]);setText("blinkState","0");setText("closureDurationState","0.0 s");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("downloadEvents").addEventListener("click",downloadEvents);
