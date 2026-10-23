@@ -127,7 +127,7 @@ function showEyeSignal(signal,closed){
  setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
  setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
  if(signal.fatigue&&!previousFatigue&&shouldWarn("fatigue",performance.now())){
-  recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();
+  recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertWakeUp();
  }
  if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertSound();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
@@ -190,6 +190,21 @@ function logEvent(message,type="system"){
  const list=$("eventHistory");list.replaceChildren();
  for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
  if(!alertHistory.length){const li=document.createElement("li");li.textContent="No alerts yet.";list.appendChild(li);}
+}
+function alertWakeUp(){
+ if(!soundEnabled)return;
+ // Use the device's built-in speech engine, with no audio files or network calls.
+ if(!("speechSynthesis" in window)||typeof window.SpeechSynthesisUtterance!=="function"){
+  alertSound();setStatus("Speech unavailable on this browser; playing fallback beep.");return;
+ }
+ try{
+  const speech=window.speechSynthesis;
+  speech.cancel(); // Avoid queued or overlapping wake-up messages.
+  const message=new window.SpeechSynthesisUtterance("Wake up! Wake up!");
+  message.lang="en-US";message.rate=1.05;message.volume=1;
+  message.onerror=()=>setStatus("Wake-up voice could not play. Check browser speech and phone volume.");
+  speech.speak(message);
+ }catch(e){alertSound();setStatus("Speech unavailable: "+e.message);}
 }
 function alertSound(){
  if(!soundEnabled||Date.now()-lastSoundAt<5000)return;
@@ -308,7 +323,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -338,7 +353,8 @@ $("enroll").addEventListener("click",enroll);$("verify").addEventListener("click
 $("resetIgnition").addEventListener("click",()=>{virtualIgnition=false;setText("ignition","LOCKED");setText("identity","Not checked");});
 $("audioToggle").addEventListener("click",()=>{
  soundEnabled=!soundEnabled;
- $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
+ $("audioToggle").textContent=soundEnabled?"Disable audio alerts":"Enable audio alerts";
+  if(!soundEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
 $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();Object.keys(lastWarningAt).forEach(k=>delete lastWarningAt[k]);setText("blinkState","0");setText("closureDurationState","0.0 s");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
