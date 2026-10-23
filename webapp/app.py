@@ -175,6 +175,11 @@ def home() -> HTMLResponse:
     return HTMLResponse((TEMPLATE_DIR / "index.html").read_text(encoding="utf-8"))
 
 
+@app.get("/driver", response_class=HTMLResponse)
+def driver_page() -> HTMLResponse:
+    return HTMLResponse((TEMPLATE_DIR / "driver.html").read_text(encoding="utf-8"))
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
