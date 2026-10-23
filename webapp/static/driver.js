@@ -16,16 +16,25 @@ function recordEvent(type,message){
 function downloadEvents(){
  const rows=[["local_time","event_type","description"],...alertHistory.map(e=>[e.time,e.type,e.message])];
  const safe=v=>'"'+String(v).replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
- const csv=rows.map(row=>row.map(safe).join(",")).join("\\r\\n");
+ const csv=rows.map(row=>row.map(safe).join(",")).join("\r\n");
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download="driver-session-events.csv";a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+function loadOptionalScript(src){
+ return new Promise((resolve,reject)=>{
+  const el=document.createElement("script");el.src=src;el.async=true;
+  el.onload=resolve;el.onerror=()=>reject(Error("Could not load optional detection library"));
+  document.head.appendChild(el);
+ });
+}
 async function enablePhoneDetection(){
  if(phoneEnabled)return;
  $("phoneEnable").disabled=true;setText("phoneState","Loading model...");
  try{
+  if(!window.tf)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+  if(!window.cocoSsd)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
   if(!window.cocoSsd||!window.tf)throw Error("Object detection libraries unavailable");
   phoneModel=await cocoSsd.load({base:"lite_mobilenet_v2"});
   phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
