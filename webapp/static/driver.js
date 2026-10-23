@@ -5,6 +5,7 @@ let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=
 let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
 let previousFatigue=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
+const metrics=new window.DriverFatigueMetrics();
 function logEvent(message){
  alertHistory.unshift({time:new Date().toLocaleTimeString(),message});
  if(alertHistory.length>25)alertHistory.pop();
@@ -61,34 +62,34 @@ async function stableDescriptor(){
 }
 function ear(points){return (distance(points[1],points[5])+distance(points[2],points[4]))/(2*Math.max(.001,distance(points[0],points[3])));}
 function monitoring(result){
- liveDetection=result;setText("faceState",result?"Detected":"Not detected");
- if(!result){["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));eyesClosedSince=headAwaySince=yawnSince=null;wasEyesClosed=false;closedFrameCount=0;previousFatigue=previousDistraction=previousYawn=false;setText("monitorState","Tracking lost");return;}
+ setText("faceState",result?"Detected":"Not detected");
+ if(!result){
+  metrics.reset();
+  ["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));
+  setText("perclosState","Collecting data");
+  setText("blinkState","0");
+  previousFatigue=previousDistraction=previousYawn=false;
+  setText("monitorState","Tracking lost");return;
+ }
  const p=result.landmarks.positions;
  const e=(ear(p.slice(36,42))+ear(p.slice(42,48)))/2;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
  const offset=(p[30].x-eyeCenter)/Math.max(1,eyeWidth);
- const closed=e<.21, yawning=mouth>.45, away=Math.abs(offset)>.25,now=performance.now();
- if(closed){closedFrameCount++;}else{
-  if(wasEyesClosed&&closedFrameCount>=1&&closedFrameCount<=3){blinkCount++;setText("blinkState",String(blinkCount));}
-  closedFrameCount=0;
- }
- wasEyesClosed=closed;
- eyesClosedSince=closed?(eyesClosedSince??now):null;
- yawnSince=yawning?(yawnSince??now):null;
- headAwaySince=away?(headAwaySince??now):null;
- const fatigue=eyesClosedSince!==null&&now-eyesClosedSince>1500;
- const distracted=headAwaySince!==null&&now-headAwaySince>2000;
- const prolongedYawn=yawnSince!==null&&now-yawnSince>1200;
- if(fatigue&&!previousFatigue){logEvent("Prolonged eye closure");alertSound();}
- if(distracted&&!previousDistraction){logEvent("Prolonged head turn");alertSound();}
- if(prolongedYawn&&!previousYawn){logEvent("Possible yawn");}
- previousFatigue=fatigue;previousDistraction=distracted;previousYawn=prolongedYawn;
- setText("eyeState",closed?"Likely closed":"Open");setText("yawnState",yawning?"Mouth open":"No cue");
+ const closed=e<.21,yawning=mouth>.45,away=Math.abs(offset)>.25;
+ const signal=metrics.update({time:performance.now(),eyeClosed:closed,headAway:away,yawning});
+ setText("blinkState",String(signal.blinks));
+ setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
+ if(signal.fatigue&&!previousFatigue){logEvent(signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertSound();}
+ if(signal.distraction&&!previousDistraction){logEvent("Prolonged head turn");alertSound();}
+ if(signal.prolongedYawn&&!previousYawn){logEvent("Possible yawn");}
+ previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
+ setText("eyeState",closed?"Likely closed":"Open");
+ setText("yawnState",yawning?"Mouth open":"No cue");
  setText("headState",away?"Turned away":"Centered");
- setText("fatigueState",fatigue?"Warning":"No sustained closure");
- setText("distractionState",distracted?"Warning":"No prolonged head turn");
- setText("monitorState",fatigue||distracted?"Attention required":"Monitoring");
+ setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
+ setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
+ setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
 }
 async function cycle(){if(busy||!stream||!modelsReady)return;busy=true;try{monitoring(await detect());}catch(e){monitoring(null);setStatus("Tracking error: "+e.message);}finally{busy=false;}}
 async function start(){
@@ -136,5 +137,5 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;blinkCount=0;setText("blinkState","0");logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");logEvent("Session counters reset");});
 window.addEventListener("pagehide",()=>{stop();descriptor=null;pinHash=null;});
