@@ -2,7 +2,28 @@
 const $=id=>document.getElementById(id);
 const video=$("camera");
 let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=null,eyesClosedSince=null,headAwaySince=null,yawnSince=null,liveDetection=null;
-let virtualIgnition=false,authFailures=0,lockedUntil=0;
+let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
+let previousFatigue=false,previousDistraction=false,previousYawn=false;
+const alertHistory=[];
+function logEvent(message){
+ alertHistory.unshift({time:new Date().toLocaleTimeString(),message});
+ if(alertHistory.length>25)alertHistory.pop();
+ const list=$("eventHistory");list.replaceChildren();
+ for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
+ if(!alertHistory.length){const li=document.createElement("li");li.textContent="No alerts yet.";list.appendChild(li);}
+}
+function alertSound(){
+ if(!soundEnabled||Date.now()-lastSoundAt<5000)return;
+ lastSoundAt=Date.now();
+ try{
+  audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();
+  if(audioContext.state==="suspended")audioContext.resume();
+  const osc=audioContext.createOscillator(),gain=audioContext.createGain();
+  osc.type="sine";osc.frequency.value=880;gain.gain.value=.06;
+  osc.connect(gain);gain.connect(audioContext.destination);
+  osc.start();osc.stop(audioContext.currentTime+.22);
+ }catch(e){setStatus("Audio alerts unavailable: "+e.message);}
+}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
 function secureContext(){return window.isSecureContext&&!!navigator.mediaDevices?.getUserMedia;}
@@ -41,18 +62,28 @@ async function stableDescriptor(){
 function ear(points){return (distance(points[1],points[5])+distance(points[2],points[4]))/(2*Math.max(.001,distance(points[0],points[3])));}
 function monitoring(result){
  liveDetection=result;setText("faceState",result?"Detected":"Not detected");
- if(!result){["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));eyesClosedSince=headAwaySince=yawnSince=null;setText("monitorState","Tracking lost");return;}
+ if(!result){["eyeState","yawnState","headState","fatigueState","distractionState"].forEach(x=>setText(x,"Unknown"));eyesClosedSince=headAwaySince=yawnSince=null;wasEyesClosed=false;closedFrameCount=0;previousFatigue=previousDistraction=previousYawn=false;setText("monitorState","Tracking lost");return;}
  const p=result.landmarks.positions;
  const e=(ear(p.slice(36,42))+ear(p.slice(42,48)))/2;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
  const offset=(p[30].x-eyeCenter)/Math.max(1,eyeWidth);
  const closed=e<.21, yawning=mouth>.45, away=Math.abs(offset)>.25,now=performance.now();
+ if(closed){closedFrameCount++;}else{
+  if(wasEyesClosed&&closedFrameCount>=1&&closedFrameCount<=3){blinkCount++;setText("blinkState",String(blinkCount));}
+  closedFrameCount=0;
+ }
+ wasEyesClosed=closed;
  eyesClosedSince=closed?(eyesClosedSince??now):null;
  yawnSince=yawning?(yawnSince??now):null;
  headAwaySince=away?(headAwaySince??now):null;
  const fatigue=eyesClosedSince!==null&&now-eyesClosedSince>1500;
  const distracted=headAwaySince!==null&&now-headAwaySince>2000;
+ const prolongedYawn=yawnSince!==null&&now-yawnSince>1200;
+ if(fatigue&&!previousFatigue){logEvent("Prolonged eye closure");alertSound();}
+ if(distracted&&!previousDistraction){logEvent("Prolonged head turn");alertSound();}
+ if(prolongedYawn&&!previousYawn){logEvent("Possible yawn");}
+ previousFatigue=fatigue;previousDistraction=distracted;previousYawn=prolongedYawn;
  setText("eyeState",closed?"Likely closed":"Open");setText("yawnState",yawning?"Mouth open":"No cue");
  setText("headState",away?"Turned away":"Centered");
  setText("fatigueState",fatigue?"Warning":"No sustained closure");
@@ -100,4 +131,10 @@ async function verify(){
 $("cameraStart").addEventListener("click",start);$("cameraStop").addEventListener("click",stop);
 $("enroll").addEventListener("click",enroll);$("verify").addEventListener("click",verify);
 $("resetIgnition").addEventListener("click",()=>{virtualIgnition=false;setText("ignition","LOCKED");setText("identity","Not checked");});
+$("audioToggle").addEventListener("click",()=>{
+ soundEnabled=!soundEnabled;
+ $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
+ if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
+});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;blinkCount=0;setText("blinkState","0");logEvent("Session counters reset");});
 window.addEventListener("pagehide",()=>{stop();descriptor=null;pinHash=null;});
