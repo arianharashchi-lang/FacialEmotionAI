@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const video=$("camera");
 let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=null,eyesClosedSince=null,headAwaySince=null,yawnSince=null,liveDetection=null;
-let virtualIgnition=false;
+let virtualIgnition=false,authFailures=0,lockedUntil=0;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
 function secureContext(){return window.isSecureContext&&!!navigator.mediaDevices?.getUserMedia;}
@@ -16,7 +16,28 @@ async function loadModels(){
  modelsReady=true;
 }
 const opts=()=>new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:.5});
-async function detect(){if(!modelsReady||!stream||video.readyState<2)return null;return await faceapi.detectSingleFace(video,opts()).withFaceLandmarks().withFaceDescriptor();}
+async function detect(){
+ if(!modelsReady||!stream||video.readyState<2)return null;
+ // Reject ambiguous scenes rather than silently selecting one of several faces.
+ const faces=await faceapi.detectAllFaces(video,opts()).withFaceLandmarks().withFaceDescriptors();
+ if(faces.length>1)throw Error("Multiple faces detected. Only the driver should be visible.");
+ return faces.length===1?faces[0]:null;
+}
+async function stableDescriptor(){
+ const samples=[];
+ for(let i=0;i<3;i++){
+  const r=await detect();
+  if(!r)throw Error("Face not detected. Look at the camera in good light.");
+  samples.push(r.descriptor);
+  if(i!==2)await new Promise(resolve=>setTimeout(resolve,350));
+ }
+ for(let i=1;i<samples.length;i++){
+  if(faceapi.euclideanDistance(samples[0],samples[i])>.38)throw Error("Unstable face capture. Hold still and retry.");
+ }
+ const output=new Float32Array(samples[0].length);
+ for(const sample of samples){for(let i=0;i<output.length;i++)output[i]+=sample[i]/samples.length;}
+ return output;
+}
 function ear(points){return (distance(points[1],points[5])+distance(points[2],points[4]))/(2*Math.max(.001,distance(points[0],points[3])));}
 function monitoring(result){
  liveDetection=result;setText("faceState",result?"Detected":"Not detected");
@@ -56,8 +77,8 @@ async function enroll(){
  const pin=$("pin").value;
  if(pin.length<6){setText("enrollStatus","Use at least 6 characters for this session PIN.");return;}
  setText("enrollStatus","Capturing face...");
- try{const r=await detect();if(!r)throw Error("Exactly one clearly visible face is required. Avoid multiple faces.");
- descriptor=new Float32Array(r.descriptor);pinHash=await hashPin(pin);$("pin").value="";
+ try{if(!stream)throw Error("Start camera first.");
+ const candidate=await stableDescriptor();const newHash=await hashPin(pin);descriptor=candidate;pinHash=newHash;authFailures=0;lockedUntil=0;virtualIgnition=false;setText("ignition","LOCKED");$("pin").value="";
  setText("enrollStatus","Driver enrolled for this tab session. Not saved to server or browser storage.");
  setText("identity","Enrolled (unverified)");
  }catch(e){setText("enrollStatus",e.message);}
@@ -65,13 +86,14 @@ async function enroll(){
 async function verify(){
  if(!descriptor||!pinHash){setText("identity","Enroll a driver first");return;}
  try{
+ if(Date.now()<lockedUntil){setText("identity","Temporarily locked. Try again later.");return;}
  const pin=$("verifyPin").value;$("verifyPin").value="";
  const pinOK=await hashPin(pin)===pinHash;
- const r=await detect();if(!r){setText("identity","Face not detected");return;}
- const d=faceapi.euclideanDistance(descriptor,r.descriptor);
+ const observed=await stableDescriptor();
+ const d=faceapi.euclideanDistance(descriptor,observed);
  const matched=d<.47; // A demonstration threshold, not calibrated for security.
- if(pinOK&&matched){virtualIgnition=true;setText("ignition","AUTHORIZED (SIMULATION)");setText("identity","Matched + PIN accepted");}
- else{setText("identity","Not authorized");setStatus("Demo verification failed. No vehicle hardware is controlled.");}
+ if(pinOK&&matched){authFailures=0;virtualIgnition=true;setText("ignition","AUTHORIZED (SIMULATION)");setText("identity","Matched + PIN accepted");}
+ else{authFailures++;if(authFailures>=5){lockedUntil=Date.now()+30000;authFailures=0;}setText("identity","Not authorized");setStatus("Demo verification failed. After 5 failures, checks pause for 30 seconds. No vehicle hardware is controlled.");}
  }catch(e){setText("identity","Verification error");setStatus(e.message);}
 }
 $("cameraStart").addEventListener("click",start);$("cameraStop").addEventListener("click",stop);
