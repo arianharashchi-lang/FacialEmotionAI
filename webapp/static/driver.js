@@ -6,10 +6,46 @@ let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClose
 let previousFatigue=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
 const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
+const sessionStart=Date.now();
+const sessionAnalyticsEvents=[];
+function downloadLocal(name,blob){
+ const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function renderAnalytics(){
+ const report=window.DriverSessionAnalytics.summarize(sessionAnalyticsEvents,sessionStart,Date.now());
+ setText("analyticsTotal",String(report.total));
+ setText("sessionMinutes",String(report.durationMinutes));
+ const chart=$("categoryChart");chart.replaceChildren();
+ for(const type of window.DriverSessionAnalytics.TYPES){
+  const row=document.createElement("div");row.className="report-bar";
+  const label=document.createElement("span");label.textContent=window.DriverSessionAnalytics.LABELS[type];
+  const track=document.createElement("div");track.className="report-track";
+  const fill=document.createElement("div");fill.className="report-fill";fill.style.width=(report.total?Math.round(report.counts[type]*100/report.total):0)+"%";
+  const count=document.createElement("strong");count.textContent=String(report.counts[type]);
+  track.append(fill);row.append(label,track,count);chart.append(row);
+ }
+ const timeline=$("timeChart");timeline.replaceChildren();
+ for(const bucket of report.buckets.slice(-15)){
+  const bar=document.createElement("div");bar.className="minute-bar";
+  bar.style.height=(Math.max(2,Math.min(100,bucket.total*14)))+"%";
+  bar.title="Minute "+bucket.minute+": "+bucket.total+" warning(s)";
+  bar.setAttribute("aria-label",bar.title);timeline.append(bar);
+ }
+}
+function downloadFullReport(){
+ const markup=window.DriverSessionAnalytics.reportHTML(sessionAnalyticsEvents,sessionStart,Date.now());
+ downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
+}
+
 let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneAlertActive=false;
 function recordEvent(type,message){
  const name=Object.prototype.hasOwnProperty.call(eventCounts,type)?type:"head";
- eventCounts[name]++;setText("eventCount",String(Object.values(eventCounts).reduce((a,b)=>a+b,0)));
+ eventCounts[name]++;
+ sessionAnalyticsEvents.push({type:name,at:Date.now(),message});
+ if(sessionAnalyticsEvents.length>1000)sessionAnalyticsEvents.shift();
+ renderAnalytics();
+ setText("eventCount",String(Object.values(eventCounts).reduce((a,b)=>a+b,0)));
  setText("lastEvent",message);
  logEvent(message,name);
 }
@@ -248,7 +284,9 @@ $("audioToggle").addEventListener("click",()=>{
  $("audioToggle").textContent=soundEnabled?"Disable sound alerts":"Enable sound alerts";
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
-$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
+$("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();setText("blinkState","0");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("downloadEvents").addEventListener("click",downloadEvents);
+$("downloadReport").addEventListener("click",downloadFullReport);
+renderAnalytics();
 window.addEventListener("pagehide",()=>{stop();descriptor=null;pinHash=null;});
