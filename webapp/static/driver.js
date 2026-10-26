@@ -135,7 +135,7 @@ function showEyeSignal(signal,closed){
  }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
- if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");if(!fatigueWarningActive)alertTurnAway();}
+ if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertTurnAway();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
@@ -173,7 +173,7 @@ function updateGaze(result){
  const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
  setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
- if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");if(!fatigueWarningActive)alertTurnAway();}
+ if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");alertTurnAway();}
  irisWarning=output.sustainedAway;
  if(!output.valid)irisWarning=false;
 }
@@ -197,40 +197,60 @@ function logEvent(message,type="system"){
  for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
  if(!alertHistory.length){const li=document.createElement("li");li.textContent="No alerts yet.";list.appendChild(li);}
 }
+const speechQueue=[];
+let currentSpeech=null;
 function speakAlert(phrase,priority=1,force=false){
  if(!soundEnabled&&!force)return;
  if(!("speechSynthesis" in window)||typeof window.SpeechSynthesisUtterance!=="function"){
   setStatus("Voice unavailable in this browser. No beep will play. Try a browser with speech synthesis.");
   return;
  }
+ const synth=window.speechSynthesis;
+ // Do not interrupt a higher-priority alert. Queue lower-priority alerts instead.
+ if(currentSpeech&&currentSpeech.priority>priority){
+  if(!speechQueue.some(item=>item.phrase===phrase)){
+   speechQueue.push({phrase,priority,force});
+   speechQueue.sort((a,b)=>b.priority-a.priority);
+  }
+  return;
+ }
+ // Avoid restarting the same alert while it is already being spoken.
+ if(currentSpeech&&currentSpeech.phrase===phrase&&currentSpeech.priority===priority)return;
+ playSpeech({phrase,priority,force});
+}
+function playSpeech(item){
+ const synth=window.speechSynthesis;
+ const token=++speechToken;
  try{
-  const synth=window.speechSynthesis;
-  // Fatigue speech outranks distraction speech; a lower-priority warning must not cancel it.
-  if(activeSpeechPriority>priority&&synth.speaking)return;
-  const token=++speechToken;
-  synth.cancel();
-  activeSpeechPriority=priority;
-  const speech=new window.SpeechSynthesisUtterance(phrase);
+  if(currentSpeech||synth.speaking||synth.pending)synth.cancel();
+  currentSpeech={phrase:item.phrase,priority:item.priority,token};
+  activeSpeechPriority=item.priority;
+  const speech=new window.SpeechSynthesisUtterance(item.phrase);
   speech.lang="en-US";speech.rate=1;speech.pitch=1;speech.volume=1;
   const voices=synth.getVoices();
   const english=voices.find(voice=>voice.lang&&voice.lang.toLowerCase().startsWith("en"));
   if(english)speech.voice=english;
-  speech.onstart=()=>{if(token===speechToken)setStatus("Speaking: "+phrase);};
-  speech.onend=()=>{if(token===speechToken)activeSpeechPriority=0;};
-  speech.onerror=(e)=>{if(token===speechToken)activeSpeechPriority=0;setStatus("Voice alert failed ("+(e.error||"unknown")+"). Check device voice support and volume.");};
+  const finish=()=>{
+   if(token!==speechToken)return;
+   currentSpeech=null;activeSpeechPriority=0;
+   if(speechQueue.length){
+    const next=speechQueue.shift();
+    if(soundEnabled||next.force)playSpeech(next);
+   }
+  };
+  speech.onstart=()=>{if(token===speechToken)setStatus("Speaking: "+item.phrase);};
+  speech.onend=finish;
+  speech.onerror=(e)=>{if(token===speechToken){setStatus("Voice alert failed ("+(e.error||"unknown")+"). Check device voice support and volume.");finish();}};
   synth.speak(speech);
   if(synth.paused)synth.resume();
-  setStatus("Voice requested: "+phrase+". If silent, check device speech support.");
- }catch(e){setStatus("Voice unavailable: "+e.message);}
+  setStatus("Voice requested: "+item.phrase+".");
+ }catch(e){currentSpeech=null;activeSpeechPriority=0;setStatus("Voice unavailable: "+e.message);}
 }
 function alertWakeUp(force=false){
  setStatus("Fatigue warning: Wake up voice requested.");
  speakAlert("Wake up! Wake up!",2,force);
 }
-function alertTurnAway(){
- if(fatigueWarningActive)return;
- speakAlert("Turn away!",1,false);
-}
+function alertTurnAway(){speakAlert("Turn away!",1,false);}
 function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
@@ -337,7 +357,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -368,7 +388,7 @@ $("resetIgnition").addEventListener("click",()=>{virtualIgnition=false;setText("
 $("audioToggle").addEventListener("click",()=>{
  soundEnabled=!soundEnabled;
  $("audioToggle").textContent=soundEnabled?"Disable audio alerts":"Enable audio alerts";
-  if(!soundEnabled&&"speechSynthesis" in window)window.speechSynthesis.cancel();
+  if(!soundEnabled&&"speechSynthesis" in window){window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;}
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
 $("testWakeVoice").addEventListener("click",()=>alertWakeUp(true));
