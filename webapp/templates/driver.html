@@ -27,6 +27,8 @@
 <p class="help">Session-only counts of algorithmic warning events. Not a measure of actual safe or unsafe driving. History is cleared on refresh, and only local exports are generated.</p>
 <div class="metric"><span>Tracked session minutes (elapsed)</span><strong id="sessionMinutes">0</strong></div>
 <div class="metric"><span>Warnings in report</span><strong id="analyticsTotal">0</strong></div>
+<div class="metric"><span>Experimental attention indicator</span><strong><span id="attentionScore">100</span>/100</strong></div>
+<p class="help" id="attentionScoreLabel">Few detected cues. This heuristic is not a validated safety score.</p>
 <h3>Warnings by category</h3><div id="categoryChart" class="category-chart" aria-label="Warning counts by category"></div>
 <h3>Recent minute-by-minute warnings</h3><div id="timeChart" class="time-chart" aria-label="Recent warning event counts per minute"></div>
 <div class="camera-actions"><button id="downloadReport" type="button">Download full session report (HTML)</button></div></div>
