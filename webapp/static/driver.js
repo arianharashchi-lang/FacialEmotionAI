@@ -4,6 +4,7 @@ const video=$("camera");
 let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=null,eyesClosedSince=null,headAwaySince=null,yawnSince=null,liveDetection=null;
 let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
 let previousProlongedClosure=false,previousElevatedClosure=false,previousDistraction=false,previousYawn=false;
+let fatigueWarningActive=false,activeSpeechPriority=0,speechToken=0;
 const alertHistory=[];
 const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
 const sessionStart=Date.now();
@@ -119,6 +120,7 @@ function calibrateEyes(ratio){
  return ratio<eyeThreshold;
 }
 function showEyeSignal(signal,closed){
+ fatigueWarningActive=Boolean(signal.fatigue);
  setText("blinkState",String(signal.blinks));
  setText("closureDurationState",(signal.eyeClosureMs/1000).toFixed(1)+" s");
  setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
@@ -133,7 +135,7 @@ function showEyeSignal(signal,closed){
  }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
- if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertTurnAway();}
+ if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");if(!fatigueWarningActive)alertTurnAway();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
@@ -171,7 +173,7 @@ function updateGaze(result){
  const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
  setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
- if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");alertTurnAway();}
+ if(output.sustainedAway&&!irisWarning){recordEvent("gaze","Sustained iris shift (experimental)");if(!fatigueWarningActive)alertTurnAway();}
  irisWarning=output.sustainedAway;
  if(!output.valid)irisWarning=false;
 }
@@ -195,7 +197,7 @@ function logEvent(message,type="system"){
  for(const item of alertHistory){const li=document.createElement("li");li.textContent=item.time+" — "+item.message;list.appendChild(li);}
  if(!alertHistory.length){const li=document.createElement("li");li.textContent="No alerts yet.";list.appendChild(li);}
 }
-function speakAlert(phrase,force=false){
+function speakAlert(phrase,priority=1,force=false){
  if(!soundEnabled&&!force)return;
  if(!("speechSynthesis" in window)||typeof window.SpeechSynthesisUtterance!=="function"){
   setStatus("Voice unavailable in this browser. No beep will play. Try a browser with speech synthesis.");
@@ -203,14 +205,19 @@ function speakAlert(phrase,force=false){
  }
  try{
   const synth=window.speechSynthesis;
+  // Fatigue speech outranks distraction speech; a lower-priority warning must not cancel it.
+  if(activeSpeechPriority>priority&&synth.speaking)return;
+  const token=++speechToken;
   synth.cancel();
+  activeSpeechPriority=priority;
   const speech=new window.SpeechSynthesisUtterance(phrase);
   speech.lang="en-US";speech.rate=1;speech.pitch=1;speech.volume=1;
   const voices=synth.getVoices();
   const english=voices.find(voice=>voice.lang&&voice.lang.toLowerCase().startsWith("en"));
   if(english)speech.voice=english;
-  speech.onstart=()=>setStatus("Speaking: "+phrase);
-  speech.onerror=(e)=>setStatus("Voice alert failed ("+(e.error||"unknown")+"). Check device voice support and volume.");
+  speech.onstart=()=>{if(token===speechToken)setStatus("Speaking: "+phrase);};
+  speech.onend=()=>{if(token===speechToken)activeSpeechPriority=0;};
+  speech.onerror=(e)=>{if(token===speechToken)activeSpeechPriority=0;setStatus("Voice alert failed ("+(e.error||"unknown")+"). Check device voice support and volume.");};
   synth.speak(speech);
   if(synth.paused)synth.resume();
   setStatus("Voice requested: "+phrase+". If silent, check device speech support.");
@@ -218,9 +225,12 @@ function speakAlert(phrase,force=false){
 }
 function alertWakeUp(force=false){
  setStatus("Fatigue warning: Wake up voice requested.");
- speakAlert("Wake up! Wake up!",force);
+ speakAlert("Wake up! Wake up!",2,force);
 }
-function alertTurnAway(){speakAlert("Turn away!");}
+function alertTurnAway(){
+ if(fatigueWarningActive)return;
+ speakAlert("Turn away!",1,false);
+}
 function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
