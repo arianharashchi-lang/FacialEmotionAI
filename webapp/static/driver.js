@@ -78,7 +78,7 @@ async function enablePhoneDetection(){
   if(typeof window.cocoSsd.load!=="function")throw Error("COCO-SSD model loader unavailable");
   phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2"});
   phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
- }catch(e){setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
+ }catch(e){console.error("Phone detection initialization failed:",e);setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
 }
 async function scanPhone(time){
  if(!phoneEnabled||!phoneModel||phoneBusy||!stream||time-phoneLastAt<2600)return;
