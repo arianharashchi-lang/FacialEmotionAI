@@ -53,7 +53,8 @@ function recordEvent(type,message){
 function downloadEvents(){
  const rows=[["local_time","event_type","description"],...alertHistory.map(e=>[e.time,e.type,e.message])];
  const safe=v=>'"'+String(v).replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
- const csv=rows.map(row=>row.map(safe).join(",")).join("\r\n");
+ const csv=rows.map(row=>row.map(safe).join(",")).join("\r
+");
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download="driver-session-events.csv";a.click();
@@ -135,7 +136,7 @@ function showEyeSignal(signal,closed){
  }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
- if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertTurnAway();}
+ if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
@@ -250,7 +251,7 @@ function alertWakeUp(force=false){
  setStatus("Fatigue warning: Wake up voice requested.");
  speakAlert("Wake up! Wake up!",2,force);
 }
-function alertTurnAway(){speakAlert("Turn away!",1,false);}
+function alertTurnAway(){speakAlert("Turn away!",2,false);}
 function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
@@ -302,7 +303,10 @@ function monitoring(result){
  const p=result.landmarks.positions;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
- latestYawning=mouth>.45;const noseOffset=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth));\n // Use hysteresis so small landmark jitter does not flicker the head-turn state.\n if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;\n latestHeadAway=headTurnState;
+ latestYawning=mouth>.45;const noseOffset=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth));
+ // Use hysteresis so small landmark jitter does not flicker the head-turn state.
+ if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;
+ latestHeadAway=headTurnState;
  setText("yawnState",latestYawning?"Mouth open":"No cue");
  setText("headState",latestHeadAway?"Turned away":"Centered");
  if(!irisReady){
