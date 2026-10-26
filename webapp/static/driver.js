@@ -68,21 +68,23 @@ function loadOptionalScript(src){
 }
 async function enablePhoneDetection(){
  if(phoneEnabled)return;
- $("phoneEnable").disabled=true;setText("phoneState","Loading model...");
+ $("phoneEnable").disabled=true;setText("phoneState","Loading YOLO model...");
  try{
-  if(!window.tf)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
-  if(!window.cocoSsd)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
-  if(!window.cocoSsd||!window.tf)throw Error("Object detection libraries unavailable");
-  phoneModel=await cocoSsd.load({base:"lite_mobilenet_v2"});
-  phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
- }catch(e){setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
+  // Browser-side YOLO keeps camera frames on the user's device; no frame is uploaded.
+  const yoloModule=await import("https://esm.sh/@ultralytics/yolo");
+  if(typeof yoloModule.YOLO?.load!=="function")throw Error("YOLO browser library unavailable");
+  phoneModel=await yoloModule.YOLO.load("https://huggingface.co/flotek/yolo26n-onnx/resolve/main/model.onnx");
+  if(typeof phoneModel.predict!=="function")throw Error("YOLO model did not initialize");
+  phoneEnabled=true;setText("phoneState","YOLO monitoring (experimental)");
+ }catch(e){phoneModel=null;phoneEnabled=false;setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
 }
 async function scanPhone(time){
  if(!phoneEnabled||!phoneModel||phoneBusy||!stream||time-phoneLastAt<2600)return;
  phoneBusy=true;phoneLastAt=time;
  try{
-  const detections=await phoneModel.detect(video,10,.65);
-  const visible=detections.some(item=>item.class==="cell phone"&&item.score>=.70);
+  const prediction=await phoneModel.predict(video,{conf:.45});
+  const boxes=Array.isArray(prediction?.boxes)?prediction.boxes:[];
+  const visible=boxes.some(item=>item.name==="cell phone"&&Number(item.conf)>=.70);
   if(visible){
    if(phoneSeenSince===null)phoneSeenSince=time;
    if(time-phoneSeenSince>=2400&&!phoneAlertActive){
@@ -90,7 +92,7 @@ async function scanPhone(time){
    }
    setText("phoneState","Possible phone detected"+(phoneAlertActive?" — warning":""));
   }else{phoneSeenSince=null;phoneAlertActive=false;setText("phoneState","No phone detected");}
- }catch(e){setText("phoneState","Detection error: "+e.message);phoneEnabled=false;$("phoneEnable").disabled=false;}
+ }catch(e){setText("phoneState","YOLO detection error: "+e.message);phoneEnabled=false;phoneModel=null;$("phoneEnable").disabled=false;}
  finally{phoneBusy=false;}
 }
 const metrics=new window.DriverFatigueMetrics();
