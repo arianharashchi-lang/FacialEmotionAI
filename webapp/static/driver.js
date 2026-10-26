@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const video=$("camera");
 let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=null,eyesClosedSince=null,headAwaySince=null,yawnSince=null,liveDetection=null;
 let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
-let previousFatigue=false,previousDistraction=false,previousYawn=false;
+let previousProlongedClosure=false,previousElevatedClosure=false,previousDistraction=false,previousYawn=false;
 const alertHistory=[];
 const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
 const sessionStart=Date.now();
@@ -126,17 +126,21 @@ function showEyeSignal(signal,closed){
  setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
  setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
  setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
- if(signal.fatigue&&!previousFatigue&&shouldWarn("fatigue",performance.now())){
-  recordEvent("fatigue",signal.elevatedClosure?"Elevated eye closure over observed window":"Prolonged eye closure");alertWakeUp();
+ // Speak once for every distinct prolonged-eye-closure episode. The 15-second
+ // category cooldown must not suppress a new episode after the eyes reopen.
+ if(signal.prolongedClosure&&!previousProlongedClosure){
+  recordEvent("fatigue","Prolonged eye closure");alertWakeUp();
+ }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
+  recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
  if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now())){recordEvent("head","Prolonged head turn");alertTurnAway();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
- previousFatigue=signal.fatigue;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
+ previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
 function observeFastEyes(points,now){
  if(!points||points.length<468){
   if(lastFastEyeAt!==null&&now-lastFastEyeAt>900){
-   metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;
+   metrics.resetTracking();previousProlongedClosure=previousElevatedClosure=previousDistraction=previousYawn=false;
    setText("eyeState","Unknown");setText("closureDurationState","—");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
    setText("eyeSampleState","Tracking lost");lastFastEyeAt=null;
   }
@@ -255,7 +259,7 @@ function monitoring(result){
  setText("faceState",result?"Detected":"Not detected");
  if(!result){
   if(!irisReady){
-   metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;
+   metrics.resetTracking();previousProlongedClosure=previousElevatedClosure=previousDistraction=previousYawn=false;
    setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
   }
   setText("yawnState","Unknown");setText("headState","Unknown");
@@ -283,7 +287,7 @@ async function cycle(){
   const result=await detect();
   const time=performance.now();
   if(lastInferenceAt!==null&&time-lastInferenceAt>2000){
-   if(!irisReady){metrics.resetTracking();previousFatigue=previousDistraction=previousYawn=false;}
+   if(!irisReady){metrics.resetTracking();previousProlongedClosure=previousElevatedClosure=previousDistraction=previousYawn=false;}
   }
   lastInferenceAt=time;framesAnalyzed++;
   setText("sampleState",String(framesAnalyzed));
