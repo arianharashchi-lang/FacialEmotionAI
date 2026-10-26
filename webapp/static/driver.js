@@ -216,7 +216,10 @@ function speakAlert(phrase,force=false){
   setStatus("Voice requested: "+phrase+". If silent, check device speech support.");
  }catch(e){setStatus("Voice unavailable: "+e.message);}
 }
-function alertWakeUp(force=false){speakAlert("Wake up! Wake up!",force);}
+function alertWakeUp(force=false){
+ setStatus("Fatigue warning: Wake up voice requested.");
+ speakAlert("Wake up! Wake up!",force);
+}
 function alertTurnAway(){speakAlert("Turn away!");}
 function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
