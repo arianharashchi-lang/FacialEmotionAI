@@ -126,6 +126,7 @@ function calibrateEyes(ratio){
  return ratio<eyeThreshold;
 }
 function showEyeSignal(signal,closed){
+ setText("yawnState",signal.prolongedYawn?"Possible yawn detected":latestYawning?"Mouth open — checking":"No cue");
  fatigueWarningActive=Boolean(signal.fatigue);
  setText("blinkState",String(signal.blinks));
  setText("closureDurationState",(signal.eyeClosureMs/1000).toFixed(1)+" s");
@@ -313,7 +314,7 @@ function monitoring(result){
  // Use hysteresis so small landmark jitter does not flicker the head-turn state.
  if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;
  latestHeadAway=headTurnState;
- setText("yawnState",latestYawning?"Mouth open":"No cue");
+ if(!irisReady)setText("yawnState",latestYawning?"Mouth open — checking":"No cue");
  setText("headState",latestHeadAway?"Turned away":"Centered");
  if(!irisReady){
   // Reduced-accuracy fallback when the fast mesh cannot load.
