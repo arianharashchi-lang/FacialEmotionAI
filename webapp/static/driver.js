@@ -120,6 +120,7 @@ function calibrateEyes(ratio){
  return ratio<eyeThreshold;
 }
 function showEyeSignal(signal,closed){
+ fatigueWarningActive=Boolean(signal.fatigue);
  setText("blinkState",String(signal.blinks));
  setText("closureDurationState",(signal.eyeClosureMs/1000).toFixed(1)+" s");
  setText("perclosState",signal.perclos===null?"Collecting data":Math.round(signal.perclos*100)+"%");
