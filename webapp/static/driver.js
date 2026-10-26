@@ -96,7 +96,7 @@ async function scanPhone(time){
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
-let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false;
+let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false,headTurnState=false;
 let eyeOpenBaseline=null,eyeThreshold=null;
 const lastWarningAt=Object.create(null);
 function shouldWarn(kind,time,cooldownMs=15000){
@@ -302,7 +302,7 @@ function monitoring(result){
  const p=result.landmarks.positions;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
- latestYawning=mouth>.45;latestHeadAway=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth))>.25;
+ latestYawning=mouth>.45;const noseOffset=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth));\n // Use hysteresis so small landmark jitter does not flicker the head-turn state.\n if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;\n latestHeadAway=headTurnState;
  setText("yawnState",latestYawning?"Mouth open":"No cue");
  setText("headState",latestHeadAway?"Turned away":"Centered");
  if(!irisReady){
@@ -351,7 +351,7 @@ async function start(){
  catch(irisError){setText("gazeModelState","Unavailable");setStatus("Iris tracking unavailable; basic driver monitoring still works. "+irisError.message);}
  setStatus("Face monitoring ready. Iris detection is experimental and depends on an external model.");
  $("enroll").disabled=false;$("verify").disabled=false;
- clearInterval(timer);timer=setInterval(cycle,650);
+ clearInterval(timer);timer=setInterval(cycle,300);
  clearInterval(eyeTimer);eyeTimer=setInterval(fastEyeCycle,100);
  diagnostic("Camera ready — tracking starting");
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
