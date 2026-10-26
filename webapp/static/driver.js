@@ -73,7 +73,10 @@ async function enablePhoneDetection(){
   if(!window.tf)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
   if(!window.cocoSsd)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
   if(!window.cocoSsd||!window.tf)throw Error("Object detection libraries unavailable");
-  phoneModel=await cocoSsd.load({base:"lite_mobilenet_v2"});
+  // Wait until TensorFlow.js has selected and initialized a usable backend.
+  await window.tf.ready();
+  if(typeof window.cocoSsd.load!=="function")throw Error("COCO-SSD model loader unavailable");
+  phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2"});
   phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
  }catch(e){setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
 }
