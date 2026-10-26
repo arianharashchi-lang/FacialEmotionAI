@@ -53,8 +53,7 @@ function recordEvent(type,message){
 function downloadEvents(){
  const rows=[["local_time","event_type","description"],...alertHistory.map(e=>[e.time,e.type,e.message])];
  const safe=v=>'"'+String(v).replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
- const csv=rows.map(row=>row.map(safe).join(",")).join("\r
-");
+ const csv=rows.map(row=>row.map(safe).join(",")).join("\r\n");
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download="driver-session-events.csv";a.click();
