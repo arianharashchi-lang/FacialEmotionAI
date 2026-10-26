@@ -15,8 +15,11 @@ function downloadLocal(name,blob){
 }
 function renderAnalytics(){
  const report=window.DriverSessionAnalytics.summarize(sessionAnalyticsEvents,sessionStart,Date.now());
+ const attention=window.DriverSessionAnalytics.calculateScore(sessionAnalyticsEvents);
  setText("analyticsTotal",String(report.total));
  setText("sessionMinutes",String(report.durationMinutes));
+ setText("attentionScore",String(attention.score));
+ setText("attentionScoreLabel",attention.level+" — heuristic only, not a validated safety score.");
  const chart=$("categoryChart");chart.replaceChildren();
  for(const type of window.DriverSessionAnalytics.TYPES){
   const row=document.createElement("div");row.className="report-bar";
