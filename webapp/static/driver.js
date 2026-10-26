@@ -142,7 +142,7 @@ function showEyeSignal(signal,closed){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
  if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
- if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");}
+ if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");alertYawn();}
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
 function observeFastEyes(points,now){
@@ -257,6 +257,7 @@ function alertWakeUp(force=false){
  speakAlert("Wake up! Wake up!",2,force);
 }
 function alertTurnAway(){speakAlert("Turn away!",2,false);}
+function alertYawn(){speakAlert("Possible yawn detected. Stay alert.",1,false);}
 function alertSound(){alertWakeUp();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
