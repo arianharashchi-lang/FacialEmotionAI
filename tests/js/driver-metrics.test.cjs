@@ -62,3 +62,16 @@ test("eye closure duration rises with a sustained closure, resets after opening"
  assert.equal(m.update({time:1100,eyeClosed:true,headAway:false,yawning:false}).eyeClosureMs,1000);
  assert.equal(m.update({time:1200,eyeClosed:false,headAway:false,yawning:false}).eyeClosureMs,0);
 });
+
+test("each separate prolonged eye-closure episode can trigger a new warning",()=>{
+ const m=new DriverFatigueMetrics();let previous=false,alerts=0;
+ const sample=(time,eyeClosed)=>{
+  const signal=m.update({time,eyeClosed,headAway:false,yawning:false});
+  if(signal.prolongedClosure&&!previous)alerts++;
+  previous=signal.prolongedClosure;
+  return signal;
+ };
+ sample(0,false);sample(100,true);assert.equal(sample(1700,true).prolongedClosure,true);
+ sample(1800,false);sample(2000,true);assert.equal(sample(3600,true).prolongedClosure,true);
+ assert.equal(alerts,2,"should alert once for each separate prolonged closure, not just once per 15 seconds");
+});
