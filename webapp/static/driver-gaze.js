@@ -31,7 +31,7 @@
    if(gaze.side==="center"){this.awaySince=null;}
    else if(this.awaySince===null||this.lastSide!==gaze.side){this.awaySince=time;}
    this.lastSide=gaze.side;
-   return {valid:true,side:gaze.side,offset:gaze.offset,sustainedAway:this.awaySince!==null&&time-this.awaySince>=2000};
+   return {valid:true,side:gaze.side,offset:gaze.offset,sustainedAway:this.awaySince!==null&&time-this.awaySince>=10000};
   }
  }
  if(typeof module!=="undefined"&&module.exports)module.exports={GazeTracker,estimateGaze};
