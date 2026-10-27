@@ -102,7 +102,7 @@ async function scanPhone(time){
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
-let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false,headTurnState=false,headMeshLastSeenAt=null;
+let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false,headTurnState=false,headMeshLastSeenAt=null,headTurnStartedAt=null,headTurnAlerted=false;
 let eyeOpenBaseline=null,eyeThreshold=null;
 const lastWarningAt=Object.create(null);
 function shouldWarn(kind,time,cooldownMs=15000){
@@ -142,7 +142,7 @@ function showEyeSignal(signal,closed){
  }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
- if(signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
+ if(!irisReady&&signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
  if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");alertYawn();}
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
@@ -186,9 +186,27 @@ function updateGaze(result){
   else if(headTurnState&&noseOffset<.11)headTurnState=false;
   latestHeadAway=headTurnState;
   headMeshLastSeenAt=now;
+  if(latestHeadAway){
+   if(headTurnStartedAt===null)headTurnStartedAt=now;
+   if(!headTurnAlerted&&now-headTurnStartedAt>=10000){
+    headTurnAlerted=true;
+    recordEvent("head","Head turned away for 10 seconds");
+    alertTurnAway();
+   }
+  }else{
+   headTurnStartedAt=null;
+   headTurnAlerted=false;
+  }
   setText("headState",latestHeadAway?"Turned away":"Centered");
+  setText("distractionState",headTurnStartedAt!==null&&now-headTurnStartedAt>=10000?"Warning":"No prolonged head turn");
  }else if(headMeshLastSeenAt!==null&&now-headMeshLastSeenAt>1800){
+  // A sustained tracking loss is not proof that the driver is still turned away.
+  headTurnStartedAt=null;
+  headTurnAlerted=false;
+  latestHeadAway=false;
+  headTurnState=false;
   setText("headState","Unknown");
+  setText("distractionState","Tracking lost");
  }
  observeFastEyes(p,now);
  const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
