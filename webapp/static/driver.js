@@ -317,7 +317,8 @@ function monitoring(result){
    metrics.resetTracking();previousProlongedClosure=previousElevatedClosure=previousDistraction=previousYawn=false;
    setText("eyeState","Unknown");setText("perclosState","Collecting data");setText("blinkState",String(metrics.blinks));
   }
-  setText("yawnState","Unknown");setText("headState","Unknown");
+  setText("yawnState","Unknown");
+  if(!irisReady||headMeshLastSeenAt===null||performance.now()-headMeshLastSeenAt>1800)setText("headState","Unknown");
   setText("monitorState","Tracking lost");
   return;
  }
