@@ -102,7 +102,7 @@ async function scanPhone(time){
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
-let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false,headTurnState=false;
+let eyeSamples=0,lastFastEyeAt=null,latestHeadAway=false,latestYawning=false,headTurnState=false,headMeshLastSeenAt=null;
 let eyeOpenBaseline=null,eyeThreshold=null;
 const lastWarningAt=Object.create(null);
 function shouldWarn(kind,time,cooldownMs=15000){
@@ -176,6 +176,20 @@ async function fastEyeCycle(){
 function updateGaze(result){
  const p=result&&result.multiFaceLandmarks&&result.multiFaceLandmarks.length===1?result.multiFaceLandmarks[0]:null;
  const now=performance.now();
+ // Prefer Face Mesh for head direction: it can keep tracking during turns that
+ // cause the slower face-api detector to temporarily lose the face.
+ if(p&&p.length>263){
+  const eyeCenter=(p[33].x+p[263].x)/2;
+  const eyeWidth=Math.max(.001,Math.hypot(p[33].x-p[263].x,p[33].y-p[263].y));
+  const noseOffset=Math.abs((p[1].x-eyeCenter)/eyeWidth);
+  if(!headTurnState&&noseOffset>.16)headTurnState=true;
+  else if(headTurnState&&noseOffset<.11)headTurnState=false;
+  latestHeadAway=headTurnState;
+  headMeshLastSeenAt=now;
+  setText("headState",latestHeadAway?"Turned away":"Centered");
+ }else if(headMeshLastSeenAt!==null&&now-headMeshLastSeenAt>1800){
+  setText("headState","Unknown");
+ }
  observeFastEyes(p,now);
  const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
@@ -309,13 +323,16 @@ function monitoring(result){
  }
  const p=result.landmarks.positions;
  const mouth=distance(p[62],p[66])/Math.max(1,distance(p[60],p[64]));
- const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
- latestYawning=mouth>.45;const noseOffset=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth));
- // Use hysteresis so small landmark jitter does not flicker the head-turn state.
- if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;
- latestHeadAway=headTurnState;
+ latestYawning=mouth>.45;
+ if(!irisReady){
+  const eyeCenter=(p[36].x+p[45].x)/2,eyeWidth=distance(p[36],p[45]);
+  const noseOffset=Math.abs((p[30].x-eyeCenter)/Math.max(1,eyeWidth));
+  // Fallback to face-api landmarks only when Face Mesh is unavailable.
+  if(!headTurnState&&noseOffset>.18)headTurnState=true;else if(headTurnState&&noseOffset<.12)headTurnState=false;
+  latestHeadAway=headTurnState;
+  setText("headState",latestHeadAway?"Turned away":"Centered");
+ }
  if(!irisReady)setText("yawnState",latestYawning?"Mouth open — checking":"No cue");
- setText("headState",latestHeadAway?"Turned away":"Centered");
  if(!irisReady){
   // Reduced-accuracy fallback when the fast mesh cannot load.
   const closed=(ear(p.slice(36,42))+ear(p.slice(42,48)))/2<.21;
