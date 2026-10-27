@@ -5,6 +5,7 @@ let stream=null,modelsReady=false,busy=false,timer=null,descriptor=null,pinHash=
 let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClosed=false,closedFrameCount=0,soundEnabled=false,audioContext=null,lastSoundAt=0;
 let previousProlongedClosure=false,previousElevatedClosure=false,previousDistraction=false,previousYawn=false;
 let fatigueWarningActive=false,activeSpeechPriority=0,speechToken=0;
+let eyeWasClosed=false,eyeClosedCandidateAt=null,qualifyingEyeClosures=0,pullOverWarningActive=false,pullOverSpeechLastAt=0,sirenTimer=null,sirenStep=0;
 const alertHistory=[];
 const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
 const sessionStart=Date.now();
@@ -148,13 +149,9 @@ function showEyeSignal(signal,closed){
  setText("fatigueState",signal.fatigue?"Warning":"No sustained closure");
  setText("distractionState",signal.distraction?"Warning":"No prolonged head turn");
  setText("monitorState",signal.fatigue||signal.distraction?"Attention required":"Monitoring");
- // Speak once for every distinct prolonged-eye-closure episode. The 15-second
- // category cooldown must not suppress a new episode after the eyes reopen.
- if(signal.prolongedClosure&&!previousProlongedClosure){
-  recordEvent("fatigue","Prolonged eye closure");alertWakeUp();
- }else if(signal.elevatedClosure&&!previousElevatedClosure&&shouldWarn("fatigue",performance.now())){
-  recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
- }
+ // Stage eye-closure warnings: a second sustained closure says Wake up; a third,
+ // or any closure lasting 1.5 seconds, escalates to a repeating pull-over alarm.
+ handleDrowsinessStage(signal,closed);
  if(!irisReady&&signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
  const now=performance.now();
  if(signal.prolongedYawn){
@@ -320,6 +317,69 @@ function alertWakeUp(force=false){
  setStatus("Fatigue warning: Wake up voice requested.");
  speakAlert("Wake up! Wake up!",2,force);
 }
+function alertPullOver(){speakAlert("Pull over safely! Pull over safely!",4,false);}
+function playSirenPulse(){
+ if(!soundEnabled||!audioContext)return;
+ try{
+  if(audioContext.state==="suspended")audioContext.resume();
+  const osc=audioContext.createOscillator(),gain=audioContext.createGain(),now=audioContext.currentTime;
+  osc.type="square";osc.frequency.setValueAtTime(sirenStep%2===0?880:1320,now);
+  gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.12,now+.02);gain.gain.exponentialRampToValueAtTime(.0001,now+.24);
+  osc.connect(gain);gain.connect(audioContext.destination);osc.start(now);osc.stop(now+.26);sirenStep++;
+ }catch(e){console.warn("Siren audio unavailable:",e);}
+}
+function startPullOverWarning(reason){
+ if(pullOverWarningActive)return;
+ pullOverWarningActive=true;pullOverSpeechLastAt=performance.now();
+ recordEvent("fatigue","URGENT: "+reason+" — pull over safely");
+ setText("fatigueState","URGENT — pull over safely");
+ setText("monitorState","URGENT WARNING");
+ setStatus("URGENT: Pull over safely at the first safe location. Repeating voice and siren active until acknowledged after stopping.");
+ alertPullOver();playSirenPulse();
+ clearInterval(sirenTimer);
+ sirenTimer=setInterval(()=>{
+  if(!pullOverWarningActive)return;
+  playSirenPulse();
+  const now=performance.now();
+  if(now-pullOverSpeechLastAt>=REPEATED_ALERT_MS){alertPullOver();pullOverSpeechLastAt=now;}
+ },550);
+}
+function clearPullOverWarning(acknowledged=false){
+ pullOverWarningActive=false;clearInterval(sirenTimer);sirenTimer=null;sirenStep=0;
+ if("speechSynthesis" in window&&currentSpeech&&currentSpeech.priority>=4){
+  window.speechSynthesis.cancel();currentSpeech=null;activeSpeechPriority=0;speechToken++;
+ }
+ if(acknowledged){
+  setStatus("Pull-over alarm acknowledged. Use this only after stopping in a safe place.");
+  setText("monitorState","Monitoring");
+ }
+}
+function handleDrowsinessStage(signal,closed){
+ const now=performance.now();
+ if(closed){
+  if(!eyeWasClosed)eyeClosedCandidateAt=now;
+  eyeWasClosed=true;
+  if(signal.eyeClosureMs>=1500){
+   startPullOverWarning("Eyes closed continuously for 1.5 seconds or longer");
+  }
+  return;
+ }
+ if(eyeWasClosed){
+  const duration=eyeClosedCandidateAt===null?0:now-eyeClosedCandidateAt;
+  // Ignore ordinary short blinks; only count closures lasting at least 500 ms.
+  if(duration>=500){
+   qualifyingEyeClosures++;
+   if(qualifyingEyeClosures===2&&!pullOverWarningActive){
+    recordEvent("fatigue","Second sustained eye closure");
+    alertWakeUp();
+    setStatus("Drowsiness cue: second sustained eye closure — Wake up.");
+   }else if(qualifyingEyeClosures>=3){
+    startPullOverWarning("Third or subsequent sustained eye closure");
+   }
+  }
+ }
+ eyeWasClosed=false;eyeClosedCandidateAt=null;
+}
 function alertTurnAway(){speakAlert("Turn away!",2,false);}
 function alertYawn(){speakAlert("Pull over!",3,false);}
 function alertPhone(){speakAlert("Put your phone away!",2,false);}
@@ -436,7 +496,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;phoneLastAlertAt=0;yawnWarningActive=false;yawnLastAlertAt=0;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){clearPullOverWarning(false);eyeWasClosed=false;eyeClosedCandidateAt=null;qualifyingEyeClosures=0;if("speechSynthesis" in window)window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;phoneLastAlertAt=0;yawnWarningActive=false;yawnLastAlertAt=0;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
@@ -473,6 +533,7 @@ $("audioToggle").addEventListener("click",()=>{
 $("testWakeVoice").addEventListener("click",()=>alertWakeUp(true));
 $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();Object.keys(lastWarningAt).forEach(k=>delete lastWarningAt[k]);setText("blinkState","0");setText("closureDurationState","0.0 s");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
+$("acknowledgePullOver").addEventListener("click",()=>{if(pullOverWarningActive)clearPullOverWarning(true);else setStatus("No active pull-over alarm.");});
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
 renderAnalytics();
