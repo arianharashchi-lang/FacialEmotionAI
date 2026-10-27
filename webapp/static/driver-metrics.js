@@ -34,7 +34,8 @@
    const elevatedClosure=perclos!==null&&perclos>=0.40;
    const fatigue=prolongedClosure||elevatedClosure;
    const eyeClosureMs=this.eyeStart===null?0:time-this.eyeStart;
-   const distraction=this.headStart!==null&&time-this.headStart>=800;
+   // Require a sustained head turn before warning, so brief mirror/blind-spot checks do not trigger an alert.
+   const distraction=this.headStart!==null&&time-this.headStart>=5000;
    const prolongedYawn=this.yawnStart!==null&&time-this.yawnStart>=1200;
    return {blinks:this.blinks,perclos,eyeClosed,eyeClosureMs,fatigue,prolongedClosure,elevatedClosure,distraction,prolongedYawn,windowSeconds:total/1000};
   }
