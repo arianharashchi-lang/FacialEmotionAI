@@ -209,6 +209,10 @@ function updateGaze(result){
   setText("distractionState","Tracking lost");
  }
  observeFastEyes(p,now);
+ if(irisReady){
+  const sustainedHeadTurn=headTurnStartedAt!==null&&now-headTurnStartedAt>=10000;
+  setText("distractionState",sustainedHeadTurn?"Warning":(headMeshLastSeenAt!==null&&now-headMeshLastSeenAt>1800?"Tracking lost":"No prolonged head turn"));
+ }
  const output=gazeTracker.update({time:now,points:p,headAway:latestHeadAway,eyesClosed:$("eyeState").textContent==="Likely closed"});
  setText("gazeState",output.valid?(output.side==="center"?"Centered (estimate)":output.side==="left"?"Looking left (estimate)":"Looking right (estimate)"):"Unknown");
  setText("gazeAlert",output.sustainedAway?"Possible distraction":"No sustained eye shift");
