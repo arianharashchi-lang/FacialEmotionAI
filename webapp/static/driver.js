@@ -42,7 +42,9 @@ function downloadFullReport(){
  downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
 }
 
-let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneAlertActive=false;
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneAlertActive=false,phoneLastAlertAt=0;
+const REPEATED_ALERT_MS=4000;
+let yawnWarningActive=false,yawnLastAlertAt=0;
 function recordEvent(type,message){
  const name=Object.prototype.hasOwnProperty.call(eventCounts,type)?type:"head";
  eventCounts[name]++;
@@ -91,11 +93,22 @@ async function scanPhone(time){
   const visible=detections.some(item=>item.class==="cell phone"&&item.score>=.70);
   if(visible){
    if(phoneSeenSince===null)phoneSeenSince=time;
-   if(time-phoneSeenSince>=2400&&!phoneAlertActive){
-    recordEvent("phone","Possible phone visible in camera");alertSound();phoneAlertActive=true;
+   if(time-phoneSeenSince>=2400){
+    if(!phoneAlertActive){
+     recordEvent("phone","Possible phone visible in camera");
+     phoneAlertActive=true;
+     phoneLastAlertAt=0;
+    }
+    if(time-phoneLastAlertAt>=REPEATED_ALERT_MS){
+     alertPhone();
+     phoneLastAlertAt=time;
+    }
    }
    setText("phoneState","Possible phone detected"+(phoneAlertActive?" — warning":""));
-  }else{phoneSeenSince=null;phoneAlertActive=false;setText("phoneState","No phone detected");}
+  }else{
+   phoneSeenSince=null;phoneAlertActive=false;phoneLastAlertAt=0;
+   setText("phoneState","No phone detected");
+  }
  }catch(e){setText("phoneState","Detection error: "+e.message);phoneEnabled=false;$("phoneEnable").disabled=false;}
  finally{phoneBusy=false;}
 }
@@ -143,7 +156,21 @@ function showEyeSignal(signal,closed){
   recordEvent("fatigue","Elevated eye closure over observed window");alertWakeUp();
  }
  if(!irisReady&&signal.distraction&&!previousDistraction&&shouldWarn("head",performance.now(),2500)){recordEvent("head","Prolonged head turn");alertTurnAway();}
- if(signal.prolongedYawn&&!previousYawn&&shouldWarn("yawn",performance.now())){recordEvent("yawn","Possible yawn");alertYawn();}
+ const now=performance.now();
+ if(signal.prolongedYawn){
+  if(!yawnWarningActive){
+   yawnWarningActive=true;
+   yawnLastAlertAt=0;
+   recordEvent("yawn","Possible sustained yawn");
+  }
+  if(now-yawnLastAlertAt>=REPEATED_ALERT_MS){
+   alertYawn();
+   yawnLastAlertAt=now;
+  }
+ }else{
+  yawnWarningActive=false;
+  yawnLastAlertAt=0;
+ }
  previousProlongedClosure=signal.prolongedClosure;previousElevatedClosure=signal.elevatedClosure;previousDistraction=signal.distraction;previousYawn=signal.prolongedYawn;
 }
 function observeFastEyes(points,now){
@@ -294,8 +321,9 @@ function alertWakeUp(force=false){
  speakAlert("Wake up! Wake up!",2,force);
 }
 function alertTurnAway(){speakAlert("Turn away!",2,false);}
-function alertYawn(){speakAlert("Possible yawn detected. Stay alert.",1,false);}
-function alertSound(){alertWakeUp();}
+function alertYawn(){speakAlert("Pull over!",3,false);}
+function alertPhone(){speakAlert("Put your phone away!",2,false);}
+function alertSound(){alertPhone();}
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const setText=(id,v)=>$(id).textContent=v;
 function secureContext(){return window.isSecureContext&&!!navigator.mediaDevices?.getUserMedia;}
@@ -408,7 +436,7 @@ async function start(){
  }catch(e){stop();setStatus("Could not start: "+e.message);diagnostic("Camera/model error — see status below");
  }finally{startingCamera=false;$("cameraStart").disabled=!!stream;}
 }
-function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
+function stop(){if("speechSynthesis" in window)window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;clearEyeCalibration();clearInterval(timer);timer=null;clearInterval(eyeTimer);eyeTimer=null;lastFastEyeAt=null;eyeSamples=0;setText("eyeSampleState","0");resetGaze();phoneSeenSince=null;phoneAlertActive=false;phoneLastAlertAt=0;yawnWarningActive=false;yawnLastAlertAt=0;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}video.srcObject=null;setText("cameraMessage","Camera off");setText("cameraDetails","—");$("cameraStart").disabled=false;resetDiagnostics();$("enroll").disabled=true;$("verify").disabled=true;monitoring(null);setText("monitorState","Inactive");}
 async function enroll(){
  const pin=$("pin").value;
  if(!stream){setText("enrollStatus","Start camera first.");return;}
