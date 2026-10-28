@@ -6,6 +6,7 @@ let virtualIgnition=false,authFailures=0,lockedUntil=0,blinkCount=0,wasEyesClose
 let previousProlongedClosure=false,previousElevatedClosure=false,previousDistraction=false,previousYawn=false;
 let fatigueWarningActive=false,activeSpeechPriority=0,speechToken=0;
 let eyeWasClosed=false,eyeClosedCandidateAt=null,qualifyingEyeClosures=0,eyeClosureWarningIssued=false,pullOverWarningActive=false,pullOverSpeechLastAt=0,sirenTimer=null,sirenStep=0;
+let stationaryWatchId=null,stationarySince=null,stationarySamples=0,vehicleMotionState="unknown",lastReportedSpeedMps=null;
 const alertHistory=[];
 const eventCounts={fatigue:0,head:0,gaze:0,yawn:0,phone:0};
 const sessionStart=Date.now();
@@ -374,13 +375,64 @@ function playSirenPulse(){
   osc.connect(gain);gain.connect(audioContext.destination);osc.start(now);osc.stop(now+.26);sirenStep++;
  }catch(e){console.warn("Siren audio unavailable:",e);}
 }
+function stopStationaryMonitor(){
+ if(stationaryWatchId!==null&&navigator.geolocation){
+  navigator.geolocation.clearWatch(stationaryWatchId);
+ }
+ stationaryWatchId=null;stationarySince=null;stationarySamples=0;vehicleMotionState="unknown";lastReportedSpeedMps=null;
+}
+function startStationaryMonitor(){
+ stopStationaryMonitor();
+ if(!navigator.geolocation){
+  vehicleMotionState="unknown";
+  setStatus("URGENT: Pull over safely. This browser has no geolocation API, so vehicle stop cannot be verified; the alarm will remain active.");
+  return;
+ }
+ setText("monitorState","URGENT — checking motion");
+ setStatus("URGENT: Pull over safely. Checking experimental GPS speed; this is not a wheel sensor and cannot certify a safe stop.");
+ stationaryWatchId=navigator.geolocation.watchPosition(position=>{
+  if(!pullOverWarningActive)return;
+  const coords=position.coords;
+  const speed=coords&&coords.speed;
+  const accuracy=coords&&coords.accuracy;
+  // Only use explicit GPS speed with reasonably good reported accuracy.
+  // Missing speed/poor accuracy is unknown, never proof of a stop.
+  if(typeof speed!=="number"||!Number.isFinite(speed)||typeof accuracy!=="number"||accuracy>20){
+   vehicleMotionState="unknown";stationarySince=null;stationarySamples=0;
+   setText("monitorState","URGENT — motion unknown");
+   setStatus("Urgent alarm remains active: reliable GPS speed is unavailable. GPS is only an experimental proxy, not wheel-speed data.");
+   return;
+  }
+  lastReportedSpeedMps=speed;
+  if(speed<=0.5){
+   if(vehicleMotionState!=="stationary")stationarySince=Date.now();
+   stationarySamples++;
+   vehicleMotionState="stationary";
+   setText("monitorState","Vehicle appears stationary (GPS estimate)");
+   if(stationarySamples>=3&&stationarySince!==null&&Date.now()-stationarySince>=8000){
+    recordEvent("fatigue","GPS speed estimate remained near zero; urgent alarm acknowledged after stationary confirmation");
+    clearPullOverWarning(true);
+   }else{
+    setStatus("GPS suggests the vehicle may be stopped; waiting for stable readings before clearing the alarm.");
+   }
+  }else{
+   vehicleMotionState="moving";stationarySince=null;stationarySamples=0;
+   setText("monitorState","URGENT — vehicle moving");
+   setStatus("Vehicle appears to be moving (GPS estimate). Urgent alarm remains active; STOPPED will not silence it until stationary readings are stable.");
+  }
+ },error=>{
+  vehicleMotionState="unknown";stationarySince=null;stationarySamples=0;
+  setText("monitorState","URGENT — motion unknown");
+  setStatus("GPS motion check failed ("+error.message+"). Urgent alarm remains active; use emergency override only for an emergency or sensor/software fault.");
+ },{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+}
 function startPullOverWarning(reason){
  if(pullOverWarningActive)return;
  pullOverWarningActive=true;pullOverSpeechLastAt=performance.now();
  recordEvent("fatigue","URGENT: "+reason+" — pull over safely");
  setText("fatigueState","URGENT — pull over safely");
  setText("monitorState","URGENT WARNING");
- setStatus("URGENT: Pull over safely at the first safe location. Repeating voice and siren active until acknowledged after stopping.");
+ setStatus("URGENT: Pull over safely at the first safe location. Repeating voice and siren continue until stable stationary GPS readings or a controlled emergency override.");
  alertPullOver();playSirenPulse();
  clearInterval(sirenTimer);
  sirenTimer=setInterval(()=>{
@@ -389,14 +441,16 @@ function startPullOverWarning(reason){
   const now=performance.now();
   if(now-pullOverSpeechLastAt>=REPEATED_ALERT_MS){alertPullOver();pullOverSpeechLastAt=now;}
  },550);
+ startStationaryMonitor();
 }
 function clearPullOverWarning(acknowledged=false){
  pullOverWarningActive=false;clearInterval(sirenTimer);sirenTimer=null;sirenStep=0;
+ stopStationaryMonitor();
  if("speechSynthesis" in window&&currentSpeech&&currentSpeech.priority>=4){
   window.speechSynthesis.cancel();currentSpeech=null;activeSpeechPriority=0;speechToken++;
  }
  if(acknowledged){
-  setStatus("Pull-over alarm acknowledged. Use this only after stopping in a safe place.");
+  setStatus("Stationary state was indicated by experimental GPS readings. This is not wheel-sensor verification; proceed only when it is safe.");
   setText("monitorState","Monitoring");
  }
 }
@@ -602,26 +656,30 @@ $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnal
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("acknowledgePullOver").addEventListener("click",()=>{
  if(!pullOverWarningActive){setStatus("No active pull-over alarm.");return;}
- const phrase=window.prompt("After stopping safely, type STOPPED to acknowledge. Type OVERRIDE only for an emergency or suspected sensor/software fault. Cancel keeps the alarm active:");
+ const phrase=window.prompt("Type STOPPED to request acknowledgement after stopping. The alarm will only clear if stable GPS speed readings indicate near-zero speed. Type OVERRIDE only for an emergency or suspected sensor/software fault:");
  if(phrase==="STOPPED"){
-  const confirmed=window.confirm("Confirm that the vehicle is already stopped in a safe place? This demo cannot verify actual speed or location.");
-  if(confirmed){clearPullOverWarning(true);return;}
-  setStatus("Urgent alarm remains active.");
+  if(vehicleMotionState==="stationary"&&stationarySamples>=3&&stationarySince!==null&&Date.now()-stationarySince>=8000){
+   clearPullOverWarning(true);
+  }else if(vehicleMotionState==="moving"){
+   setStatus("STOPPED rejected: GPS currently indicates movement. The urgent alarm remains active until stable near-zero speed readings are observed.");
+  }else{
+   setStatus("STOPPED not accepted: no reliable stationary confirmation yet. Keep the alarm active, pull over safely, and wait for stable GPS speed readings. If GPS speed is unavailable, the demo cannot verify a stop.");
+  }
   return;
  }
  if(phrase==="OVERRIDE"){
-  const emergencyConfirmed=window.confirm("EMERGENCY OVERRIDE: this will silence the demo alarm without verifying a safe stop. Use only for an immediate hazard or sensor/software failure. Continue?");
+  const emergencyConfirmed=window.confirm("EMERGENCY OVERRIDE: silence the demo alarm without verified stationary status. Use only for an immediate hazard or sensor/software fault. Continue?");
   if(!emergencyConfirmed)return;
   const finalPhrase=window.prompt("To confirm emergency override, type OVERRIDE:");
   if(finalPhrase==="OVERRIDE"){
    clearPullOverWarning(false);
    setText("fatigueState","Alarm overridden — verify system");
    setText("monitorState","OVERRIDE ACTIVE");
-   setStatus("Urgent alarm manually overridden. This demo has not verified that the vehicle is stopped. Stop safely as soon as possible and check the sensor/system.");
+   setStatus("Urgent alarm manually overridden. Vehicle stop was not verified. This is a demo; stop safely as soon as possible and check the system.");
   }else setStatus("Emergency override cancelled; urgent alarm remains active.");
   return;
  }
- setStatus("Urgent alarm remains active. Type STOPPED after a safe stop or OVERRIDE only for an emergency/system fault.");
+ setStatus("Urgent alarm remains active. Type STOPPED only after a safe stop; the demo requires stable GPS speed readings.");
 });
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
