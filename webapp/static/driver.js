@@ -574,7 +574,17 @@ async function verify(){
  else{authFailures++;if(authFailures>=5){lockedUntil=Date.now()+30000;authFailures=0;}setText("identity","Not authorized");setStatus("Demo verification failed. After 5 failures, checks pause for 30 seconds. No vehicle hardware is controlled.");}
  }catch(e){setText("identity","Verification error");setStatus(e.message);}
 }
-$("cameraStart").addEventListener("click",start);$("cameraStop").addEventListener("click",stop);
+$("cameraStart").addEventListener("click",start);
+$("cameraStop").addEventListener("click",()=>{
+ if(pullOverWarningActive){
+  const confirmOverride=window.confirm("Urgent alarm is active. Stopping the camera will end this monitoring session and silence the alarm. Use only for an emergency or a sensor/software fault. Continue?");
+  if(!confirmOverride)return;
+  const phrase=window.prompt("Type OVERRIDE to stop monitoring despite the active alarm:");
+  if(phrase!=="OVERRIDE"){setStatus("Monitoring continues and the urgent alarm remains active.");return;}
+  setStatus("Monitoring stopped by emergency override. The demo cannot verify that the vehicle is safely stopped.");
+ }
+ stop();
+});
 $("enroll").addEventListener("click",enroll);$("verify").addEventListener("click",verify);
 $("resetIgnition").addEventListener("click",()=>{virtualIgnition=false;setText("ignition","LOCKED");setText("identity","Not checked");});
 $("audioToggle").addEventListener("click",()=>{
@@ -592,14 +602,26 @@ $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnal
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("acknowledgePullOver").addEventListener("click",()=>{
  if(!pullOverWarningActive){setStatus("No active pull-over alarm.");return;}
- const confirmed=window.confirm("Only continue if the vehicle is already stopped in a safe place. This demo cannot verify the vehicle's actual speed or location. Continue to the controlled acknowledgement?");
- if(!confirmed)return;
- const phrase=window.prompt("Type STOPPED to acknowledge the urgent alarm, or cancel to keep it active:");
- if(phrase!=="STOPPED"){
-  setStatus("Urgent alarm remains active. To acknowledge it, stop safely first and type STOPPED.");
+ const phrase=window.prompt("After stopping safely, type STOPPED to acknowledge. Type OVERRIDE only for an emergency or suspected sensor/software fault. Cancel keeps the alarm active:");
+ if(phrase==="STOPPED"){
+  const confirmed=window.confirm("Confirm that the vehicle is already stopped in a safe place? This demo cannot verify actual speed or location.");
+  if(confirmed){clearPullOverWarning(true);return;}
+  setStatus("Urgent alarm remains active.");
   return;
  }
- clearPullOverWarning(true);
+ if(phrase==="OVERRIDE"){
+  const emergencyConfirmed=window.confirm("EMERGENCY OVERRIDE: this will silence the demo alarm without verifying a safe stop. Use only for an immediate hazard or sensor/software failure. Continue?");
+  if(!emergencyConfirmed)return;
+  const finalPhrase=window.prompt("To confirm emergency override, type OVERRIDE:");
+  if(finalPhrase==="OVERRIDE"){
+   clearPullOverWarning(false);
+   setText("fatigueState","Alarm overridden — verify system");
+   setText("monitorState","OVERRIDE ACTIVE");
+   setStatus("Urgent alarm manually overridden. This demo has not verified that the vehicle is stopped. Stop safely as soon as possible and check the sensor/system.");
+  }else setStatus("Emergency override cancelled; urgent alarm remains active.");
+  return;
+ }
+ setStatus("Urgent alarm remains active. Type STOPPED after a safe stop or OVERRIDE only for an emergency/system fault.");
 });
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
