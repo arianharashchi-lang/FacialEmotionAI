@@ -82,7 +82,25 @@ async function enablePhoneDetection(){
   // Wait until TensorFlow.js has selected and initialized a usable backend.
   await window.tf.ready();
   if(typeof window.cocoSsd.load!=="function")throw Error("COCO-SSD model loader unavailable");
-  phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2",modelUrl:"https://libs.wware.org/@tensorflow-models/models/ssdlite_mobilenet_v2/model.json"});
+  // Try independent mirrors: the legacy Google Storage endpoint may return 403,
+  // and a mirror can fail independently. COCO-SSD supports modelUrl explicitly.
+  const modelUrls=[
+   "https://www.gstaticcnapps.cn/tfjs-models/savedmodel/ssdlite_mobilenet_v2/model.json",
+   "https://libs.wware.org/@tensorflow-models/models/ssdlite_mobilenet_v2/model.json"
+  ];
+  let loadError=null;
+  for(const modelUrl of modelUrls){
+   try{
+    setText("phoneState","Loading phone model...");
+    phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2",modelUrl});
+    break;
+   }catch(modelError){
+    console.warn("Phone model mirror failed:",modelUrl,modelError);
+    loadError=modelError;
+    phoneModel=null;
+   }
+  }
+  if(!phoneModel)throw Error("All phone-model sources failed. Last error: "+(loadError&&loadError.message||"unknown error"));
   phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
  }catch(e){console.error("Phone detection initialization failed:",e);setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
 }
