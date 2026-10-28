@@ -418,7 +418,7 @@ function startStationaryMonitor(){
   }else{
    vehicleMotionState="moving";stationarySince=null;stationarySamples=0;
    setText("monitorState","URGENT — vehicle moving");
-   setStatus("Vehicle appears to be moving (GPS estimate). Urgent alarm remains active; STOPPED will not silence it until stationary readings are stable.");
+   setStatus("Vehicle appears to be moving (GPS estimate). Urgent alarm remains active until stationary readings are stable.");
   }
  },error=>{
   vehicleMotionState="unknown";stationarySince=null;stationarySamples=0;
@@ -432,7 +432,7 @@ function startPullOverWarning(reason){
  recordEvent("fatigue","URGENT: "+reason+" — pull over safely");
  setText("fatigueState","URGENT — pull over safely");
  setText("monitorState","URGENT WARNING");
- setStatus("URGENT: Pull over safely at the first safe location. Repeating voice and siren continue until stable stationary GPS readings or a controlled emergency override.");
+ setStatus("URGENT: Pull over safely at the first safe location. Repeating voice and siren continue until GPS confirms stable near-zero speed or a controlled emergency override.");
  alertPullOver();playSirenPulse();
  clearInterval(sirenTimer);
  sirenTimer=setInterval(()=>{
@@ -656,30 +656,20 @@ $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnal
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
 $("acknowledgePullOver").addEventListener("click",()=>{
  if(!pullOverWarningActive){setStatus("No active pull-over alarm.");return;}
- const phrase=window.prompt("Type STOPPED to request acknowledgement after stopping. The alarm will only clear if stable GPS speed readings indicate near-zero speed. Type OVERRIDE only for an emergency or suspected sensor/software fault:");
- if(phrase==="STOPPED"){
-  if(vehicleMotionState==="stationary"&&stationarySamples>=3&&stationarySince!==null&&Date.now()-stationarySince>=8000){
-   clearPullOverWarning(true);
-  }else if(vehicleMotionState==="moving"){
-   setStatus("STOPPED rejected: GPS currently indicates movement. The urgent alarm remains active until stable near-zero speed readings are observed.");
-  }else{
-   setStatus("STOPPED not accepted: no reliable stationary confirmation yet. Keep the alarm active, pull over safely, and wait for stable GPS speed readings. If GPS speed is unavailable, the demo cannot verify a stop.");
-  }
+ const phrase=window.prompt("GPS automatically clears the urgent alarm after stable near-zero speed readings. For an emergency or suspected sensor/software fault only, type OVERRIDE:");
+ if(phrase!=="OVERRIDE"){
+  setStatus("The urgent alarm remains active. GPS will clear it automatically only after stable, valid near-zero speed readings.");
   return;
  }
- if(phrase==="OVERRIDE"){
-  const emergencyConfirmed=window.confirm("EMERGENCY OVERRIDE: silence the demo alarm without verified stationary status. Use only for an immediate hazard or sensor/software fault. Continue?");
-  if(!emergencyConfirmed)return;
-  const finalPhrase=window.prompt("To confirm emergency override, type OVERRIDE:");
-  if(finalPhrase==="OVERRIDE"){
-   clearPullOverWarning(false);
-   setText("fatigueState","Alarm overridden — verify system");
-   setText("monitorState","OVERRIDE ACTIVE");
-   setStatus("Urgent alarm manually overridden. Vehicle stop was not verified. This is a demo; stop safely as soon as possible and check the system.");
-  }else setStatus("Emergency override cancelled; urgent alarm remains active.");
-  return;
- }
- setStatus("Urgent alarm remains active. Type STOPPED only after a safe stop; the demo requires stable GPS speed readings.");
+ const emergencyConfirmed=window.confirm("EMERGENCY OVERRIDE: silence the demo alarm without verified stationary status. Use only for an immediate hazard or sensor/software fault. Continue?");
+ if(!emergencyConfirmed)return;
+ const finalPhrase=window.prompt("To confirm emergency override, type OVERRIDE:");
+ if(finalPhrase==="OVERRIDE"){
+  clearPullOverWarning(false);
+  setText("fatigueState","Alarm overridden — verify system");
+  setText("monitorState","OVERRIDE ACTIVE");
+  setStatus("Urgent alarm manually overridden. Vehicle stop was not verified. This is a demo; stop safely as soon as possible and check the system.");
+ }else setStatus("Emergency override cancelled; urgent alarm remains active.");
 });
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
