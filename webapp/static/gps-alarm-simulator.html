@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPS Alarm Logic Simulator — FacialEmotionAI</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10151e;color:#eef2f8}
+body{max-width:760px;margin:0 auto;padding:28px 18px 48px}
+main{background:#192231;border:1px solid #344257;border-radius:18px;padding:24px}
+h1{font-size:1.5rem;margin-top:0}p{line-height:1.55;color:#c3cede}
+.notice{border-left:4px solid #e5b64b;background:#29291f;padding:12px 14px;border-radius:8px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
+.stat{background:#101722;border:1px solid #344257;border-radius:12px;padding:14px}
+.label{font-size:.82rem;color:#aebbd0}.value{font-size:1.12rem;font-weight:700;margin-top:6px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+button{border:0;border-radius:9px;padding:11px 14px;font-weight:650;cursor:pointer;background:#3b82f6;color:white}
+button.secondary{background:#39475b}button.danger{background:#b93838}
+button:disabled{opacity:.5;cursor:not-allowed}
+#log{white-space:pre-wrap;background:#0c1119;padding:12px;border-radius:10px;min-height:90px;font-family:ui-monospace,monospace;font-size:.86rem;color:#d6e0ee}
+small{color:#9eacc0}
+@media(max-width:520px){.stats{grid-template-columns:1fr}main{padding:17px}}
+</style>
+</head>
+<body>
+<main>
+<h1>GPS Alarm Logic Simulator</h1>
+<p>This isolated test page simulates the driver page's GPS decision rules. It does not request your location, change the live driver page, or play a real siren.</p>
+<div class="notice"><strong>Prototype only:</strong> simulated results check the logic, not the accuracy of real phone GPS. Never rely on this page for vehicle safety.</div>
+<div class="stats" aria-live="polite">
+  <div class="stat"><div class="label">Urgent alarm</div><div class="value" id="alarm">ACTIVE</div></div>
+  <div class="stat"><div class="label">Simulated GPS state</div><div class="value" id="motion">UNKNOWN</div></div>
+  <div class="stat"><div class="label">Zero-speed samples</div><div class="value" id="samples">0</div></div>
+  <div class="stat"><div class="label">Elapsed stable-stop time</div><div class="value" id="elapsed">0.0 s</div></div>
+</div>
+<p id="status">Start a scenario below. Alarm starts active for each test.</p>
+<div class="actions">
+<button id="zero">Test stable stop (8 seconds)</button>
+<button id="moving" class="secondary">Test moving vehicle</button>
+<button id="unknown" class="secondary">Test GPS unavailable</button>
+<button id="reset" class="danger">Reset test</button>
+</div>
+<h2>Test log</h2>
+<div id="log" role="status">Ready. No real GPS is being used.</div>
+<p><small>Expected: zero speed clears only after at least 3 samples across 8 seconds; moving or unknown speed keeps the alarm active.</small></p>
+</main>
+<script>
+"use strict";
+const el=id=>document.getElementById(id);
+let alarmActive=true, timer=null, startedAt=null, samples=0;
+function log(message){const stamp=new Date().toLocaleTimeString();el("log").textContent=stamp+" — "+message+"\n"+el("log").textContent;}
+function render(){
+ el("alarm").textContent=alarmActive?"ACTIVE":"CLEARED";
+ el("motion").textContent=startedAt===null?"UNKNOWN":(samples>0?"STATIONARY (SIMULATED)":"UNKNOWN");
+ el("samples").textContent=String(samples);
+ el("elapsed").textContent=startedAt===null?"0.0 s":((Date.now()-startedAt)/1000).toFixed(1)+" s";
+}
+function stopTimer(){if(timer!==null){clearInterval(timer);timer=null;}}
+function reset(message="Test reset. Alarm is active; GPS state is unknown."){
+ stopTimer();alarmActive=true;startedAt=null;samples=0;
+ el("status").textContent=message;render();log(message);
+}
+function runZeroTest(){
+ reset("Simulating reliable near-zero GPS speed. This test takes about 8 seconds.");
+ startedAt=Date.now();samples=1;render();log("Simulated speed = 0.0 m/s, accuracy = 10 m (sample 1).");
+ timer=setInterval(()=>{
+   if(!alarmActive){stopTimer();return;}
+   samples++;render();
+   log("Simulated speed = 0.0 m/s, accuracy = 10 m (sample "+samples+").");
+   const elapsed=Date.now()-startedAt;
+   if(samples>=3&&elapsed>=8000){
+     alarmActive=false;stopTimer();render();
+     el("status").textContent="PASS: alarm cleared after stable simulated stop (3+ samples and at least 8 seconds).";
+     log("PASS: simulated stationary condition acknowledged; alarm cleared.");
+   }
+ },2500);
+}
+function runMovingTest(){
+ reset("Simulating non-zero speed. The urgent alarm should stay active.");
+ startedAt=Date.now();samples=0;el("motion").textContent="MOVING (SIMULATED)";
+ render();el("motion").textContent="MOVING (SIMULATED)";
+ log("Simulated speed = 8.0 m/s, accuracy = 10 m. Alarm must remain active.");
+ setTimeout(()=>{
+   if(alarmActive&&startedAt!==null){
+    el("motion").textContent="MOVING (SIMULATED)";
+    el("status").textContent=alarmActive?"PASS: alarm remained active while simulated speed was non-zero.":"FAIL: alarm cleared unexpectedly.";
+    log(alarmActive?"PASS: non-zero speed did not clear alarm.":"FAIL: alarm cleared unexpectedly.");
+   }
+ },1200);
+}
+function runUnknownTest(){
+ reset("Simulating unavailable/unreliable GPS. Unknown speed must not clear the alarm.");
+ el("motion").textContent="UNKNOWN";
+ log("Simulated speed = null / GPS unavailable. Alarm must remain active.");
+ setTimeout(()=>{
+   el("motion").textContent="UNKNOWN";
+   el("status").textContent=alarmActive?"PASS: alarm remained active because speed was unknown.":"FAIL: alarm cleared unexpectedly.";
+   log(alarmActive?"PASS: unknown speed did not clear alarm.":"FAIL: alarm cleared unexpectedly.");
+ },1200);
+}
+el("zero").addEventListener("click",runZeroTest);
+el("moving").addEventListener("click",runMovingTest);
+el("unknown").addEventListener("click",runUnknownTest);
+el("reset").addEventListener("click",()=>reset());
+render();
+</script>
+</body>
+</html>
