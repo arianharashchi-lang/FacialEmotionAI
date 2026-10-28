@@ -578,15 +578,29 @@ $("cameraStart").addEventListener("click",start);$("cameraStop").addEventListene
 $("enroll").addEventListener("click",enroll);$("verify").addEventListener("click",verify);
 $("resetIgnition").addEventListener("click",()=>{virtualIgnition=false;setText("ignition","LOCKED");setText("identity","Not checked");});
 $("audioToggle").addEventListener("click",()=>{
+ if(soundEnabled&&pullOverWarningActive){
+  setStatus("Urgent pull-over alarm is active. Audio cannot be disabled from this control; use the controlled emergency override only for an emergency or system fault.");
+  return;
+ }
  soundEnabled=!soundEnabled;
  $("audioToggle").textContent=soundEnabled?"Disable audio alerts":"Enable audio alerts";
-  if(!soundEnabled&&"speechSynthesis" in window){window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;}
+ if(!soundEnabled&&"speechSynthesis" in window){window.speechSynthesis.cancel();speechQueue.length=0;currentSpeech=null;activeSpeechPriority=0;speechToken++;}
  if(soundEnabled){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();audioContext.resume();}catch(e){soundEnabled=false;setStatus("Audio unavailable: "+e.message);}}
 });
 $("testWakeVoice").addEventListener("click",()=>alertWakeUp(true));
 $("resetEvents").addEventListener("click",()=>{alertHistory.length=0;sessionAnalyticsEvents.length=0;renderAnalytics();Object.keys(eventCounts).forEach(k=>eventCounts[k]=0);setText("eventCount","0");setText("lastEvent","None");metrics.reset();clearEyeCalibration();Object.keys(lastWarningAt).forEach(k=>delete lastWarningAt[k]);setText("blinkState","0");setText("closureDurationState","0.0 s");setText("perclosState","Collecting data");resetGaze();logEvent("Session counters reset");});
 $("phoneEnable").addEventListener("click",enablePhoneDetection);
-$("acknowledgePullOver").addEventListener("click",()=>{if(pullOverWarningActive)clearPullOverWarning(true);else setStatus("No active pull-over alarm.");});
+$("acknowledgePullOver").addEventListener("click",()=>{
+ if(!pullOverWarningActive){setStatus("No active pull-over alarm.");return;}
+ const confirmed=window.confirm("Only continue if the vehicle is already stopped in a safe place. This demo cannot verify the vehicle's actual speed or location. Continue to the controlled acknowledgement?");
+ if(!confirmed)return;
+ const phrase=window.prompt("Type STOPPED to acknowledge the urgent alarm, or cancel to keep it active:");
+ if(phrase!=="STOPPED"){
+  setStatus("Urgent alarm remains active. To acknowledge it, stop safely first and type STOPPED.");
+  return;
+ }
+ clearPullOverWarning(true);
+});
 $("downloadEvents").addEventListener("click",downloadEvents);
 $("downloadReport").addEventListener("click",downloadFullReport);
 renderAnalytics();
