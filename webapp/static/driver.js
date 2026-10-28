@@ -82,7 +82,7 @@ async function enablePhoneDetection(){
   // Wait until TensorFlow.js has selected and initialized a usable backend.
   await window.tf.ready();
   if(typeof window.cocoSsd.load!=="function")throw Error("COCO-SSD model loader unavailable");
-  phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2"});
+  phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2",modelUrl:"https://libs.wware.org/@tensorflow-models/models/ssdlite_mobilenet_v2/model.json"});
   phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
  }catch(e){console.error("Phone detection initialization failed:",e);setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
 }
