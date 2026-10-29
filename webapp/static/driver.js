@@ -44,7 +44,7 @@ function downloadFullReport(){
  downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
 }
 
-let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0;
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null;
 const REPEATED_ALERT_MS=4000;
 let yawnWarningActive=false,yawnLastAlertAt=0;
 function recordEvent(type,message){
@@ -60,7 +60,7 @@ function recordEvent(type,message){
 function downloadEvents(){
  const rows=[["local_time","event_type","description"],...alertHistory.map(e=>[e.time,e.type,e.message])];
  const safe=v=>'"'+String(v).replace(/"/g,'""').replace(/^[=+@-]/,"'")+'"';
- const csv=rows.map(row=>row.map(safe).join(",")).join("\r\n");
+ const csv=rows.map(row=>row.map(safe).join(",")).join("\\r\\n");
  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download="driver-session-events.csv";a.click();
@@ -69,41 +69,136 @@ function downloadEvents(){
 function loadOptionalScript(src){
  return new Promise((resolve,reject)=>{
   const el=document.createElement("script");el.src=src;el.async=true;
-  el.onload=resolve;el.onerror=()=>reject(Error("Could not load optional detection library"));
+  el.onload=resolve;el.onerror=()=>reject(Error("Could not load optional detection library: "+src));
   document.head.appendChild(el);
  });
 }
 async function enablePhoneDetection(){
  if(phoneEnabled)return;
- $("phoneEnable").disabled=true;setText("phoneState","Loading model...");
+ $("phoneEnable").disabled=true;setText("phoneState","Loading ONNX Runtime Web...");
  try{
-  if(!window.tf)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
-  if(!window.cocoSsd)await loadOptionalScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
-  if(!window.cocoSsd||!window.tf)throw Error("Object detection libraries unavailable");
-  // Wait until TensorFlow.js has selected and initialized a usable backend.
-  await window.tf.ready();
-  if(typeof window.cocoSsd.load!=="function")throw Error("COCO-SSD model loader unavailable");
-  // Try independent mirrors: the legacy Google Storage endpoint may return 403,
-  // and a mirror can fail independently. COCO-SSD supports modelUrl explicitly.
-  const modelUrls=[
-   "https://www.gstaticcnapps.cn/tfjs-models/savedmodel/ssdlite_mobilenet_v2/model.json",
-   "https://libs.wware.org/@tensorflow-models/models/ssdlite_mobilenet_v2/model.json"
-  ];
-  let loadError=null;
-  for(const modelUrl of modelUrls){
-   try{
-    setText("phoneState","Loading phone model...");
-    phoneModel=await window.cocoSsd.load({base:"lite_mobilenet_v2",modelUrl});
-    break;
-   }catch(modelError){
-    console.warn("Phone model mirror failed:",modelUrl,modelError);
-    loadError=modelError;
-    phoneModel=null;
-   }
+  const ortVersion="1.20.1";
+  if(!window.ort)await loadOptionalScript("https://cdn.jsdelivr.net/npm/onnxruntime-web@"+ortVersion+"/dist/ort.min.js");
+  if(!window.ort||!window.ort.InferenceSession)throw Error("ONNX Runtime Web unavailable");
+  window.ort.env.wasm.wasmPaths="https://cdn.jsdelivr.net/npm/onnxruntime-web@"+ortVersion+"/dist/";
+  window.ort.env.logLevel="error";
+  setText("phoneState","Downloading YOLOX-Nano model (~3.5 MB)...");
+  const modelUrl="https://huggingface.co/skillsafe-ai/yolox-nano/resolve/8e308810ede488f742901a4ac597dc7796798e46/yolox_nano.onnx";
+  phoneModel=await window.ort.InferenceSession.create(modelUrl,{executionProviders:["webgpu","wasm"]});
+  phoneCanvas=document.createElement("canvas");phoneCanvas.width=416;phoneCanvas.height=416;
+  phoneEnabled=true;setText("phoneState","YOLOX-Nano ready — monitoring (experimental)");
+ }catch(e){
+  console.error("YOLOX-Nano phone detection initialization failed:",e);
+  setText("phoneState","Unavailable: "+(e&&e.message||String(e)));
+  phoneModel=null;phoneEnabled=false;$("phoneEnable").disabled=false;
+ }
+}
+function phoneIsInDriverZone(item,faceBox,frameWidth,frameHeight){
+ const [x,y,w,h]=item.bbox;
+ if(![x,y,w,h,frameWidth,frameHeight].every(Number.isFinite)||w<=0||h<=0)return false;
+ const phoneCenterX=x+w/2,phoneCenterY=y+h/2;
+ const faceCenterX=faceBox.x+faceBox.width/2;
+ const minWidth=Math.max(faceBox.width*.14,frameWidth*.025);
+ const minHeight=Math.max(faceBox.height*.14,frameHeight*.025);
+ const plausibleShape=(w/h)>=.22&&(w/h)<=2.1;
+ const nearDriverHorizontally=Math.abs(phoneCenterX-faceCenterX)<=Math.max(faceBox.width*2.0,frameWidth*.18);
+ const inDriverVerticalBand=phoneCenterY>=faceBox.y-faceBox.height*.20&&phoneCenterY<=Math.min(frameHeight*.97,faceBox.y+faceBox.height*5.0);
+ return w>=minWidth&&h>=minHeight&&plausibleShape&&nearDriverHorizontally&&inDriverVerticalBand;
+}
+function resetPhoneCandidate(){
+ phoneSeenSince=null;phoneCandidateFrames=0;phoneMissFrames=0;phoneAlertActive=false;phoneLastAlertAt=0;
+}
+function phoneNms(candidates,threshold=.45){
+ candidates.sort((a,b)=>b.score-a.score);
+ const kept=[];
+ for(const item of candidates){
+  let suppressed=false;
+  for(const prior of kept){
+   const [ax,ay,aw,ah]=item.bbox,[bx,by,bw,bh]=prior.bbox;
+   const ix=Math.max(0,Math.min(ax+aw,bx+bw)-Math.max(ax,bx));
+   const iy=Math.max(0,Math.min(ay+ah,by+bh)-Math.max(ay,by));
+   const intersection=ix*iy,union=aw*ah+bw*bh-intersection;
+   if(union>0&&intersection/union>threshold){suppressed=true;break;}
   }
-  if(!phoneModel)throw Error("All phone-model sources failed. Last error: "+(loadError&&loadError.message||"unknown error"));
-  phoneEnabled=true;setText("phoneState","Monitoring (experimental)");
- }catch(e){console.error("Phone detection initialization failed:",e);setText("phoneState","Unavailable: "+e.message);$("phoneEnable").disabled=false;}
+  if(!suppressed)kept.push(item);
+ }
+ return kept;
+}
+async function detectPhonesWithYolo(){
+ const width=video.videoWidth,height=video.videoHeight;
+ if(!width||!height||!phoneModel||!phoneCanvas)return [];
+ const ctx=phoneCanvas.getContext("2d",{willReadFrequently:true});
+ const scale=Math.min(416/width,416/height);
+ const resizedWidth=Math.round(width*scale),resizedHeight=Math.round(height*scale);
+ const padX=Math.floor((416-resizedWidth)/2),padY=Math.floor((416-resizedHeight)/2);
+ ctx.fillStyle="rgb(114,114,114)";ctx.fillRect(0,0,416,416);
+ ctx.drawImage(video,padX,padY,resizedWidth,resizedHeight);
+ const rgba=ctx.getImageData(0,0,416,416).data;
+ const plane=416*416,input=new Float32Array(plane*3);
+ for(let i=0;i<plane;i++){
+  input[i]=rgba[i*4];
+  input[plane+i]=rgba[i*4+1];
+  input[plane*2+i]=rgba[i*4+2];
+ }
+ const inputName=phoneModel.inputNames[0];
+ const feeds={};feeds[inputName]=new window.ort.Tensor("float32",input,[1,3,416,416]);
+ const outputs=await phoneModel.run(feeds);
+ const output=outputs[phoneModel.outputNames[0]]||outputs[Object.keys(outputs)[0]];
+ const data=output.data;
+ const dims=output.dims;
+ const rows=dims[dims.length-2],cols=dims[dims.length-1];
+ if(cols<85||rows<1)throw Error("Unexpected YOLOX-Nano output shape: "+dims.join("x"));
+ const candidates=[];
+ for(let i=0;i<rows;i++){
+  const off=i*cols,obj=data[off+4];
+  if(!Number.isFinite(obj)||obj<.20)continue;
+  const score=obj*data[off+4+1+67];
+  if(!Number.isFinite(score)||score<.35)continue;
+  const cx=data[off],cy=data[off+1],bw=data[off+2],bh=data[off+3];
+  if(![cx,cy,bw,bh].every(Number.isFinite)||bw<=0||bh<=0)continue;
+  let x1=(cx-bw/2-padX)/scale,y1=(cy-bh/2-padY)/scale;
+  let x2=(cx+bw/2-padX)/scale,y2=(cy+bh/2-padY)/scale;
+  x1=Math.max(0,Math.min(width,x1));y1=Math.max(0,Math.min(height,y1));
+  x2=Math.max(0,Math.min(width,x2));y2=Math.max(0,Math.min(height,y2));
+  if(x2>x1&&y2>y1)candidates.push({class:"cell phone",score,bbox:[x1,y1,x2-x1,y2-y1]});
+ }
+ return phoneNms(candidates).slice(0,10);
+}
+async function scanPhone(time,faceResult){
+ if(!phoneEnabled||!phoneModel||phoneBusy||!stream||time-phoneLastAt<1200)return;
+ phoneBusy=true;phoneLastAt=time;
+ try{
+  const faceBox=faceResult&&faceResult.detection&&faceResult.detection.box;
+  if(!faceBox||!video.videoWidth||!video.videoHeight){
+   resetPhoneCandidate();setText("phoneState","Waiting for driver face");return;
+  }
+  const detections=await detectPhonesWithYolo();
+  const candidates=detections.filter(item=>item.class==="cell phone"&&item.score>=.35&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  if(candidates.length){
+   phoneMissFrames=0;
+   if(phoneSeenSince===null)phoneSeenSince=time;
+   phoneCandidateFrames++;
+   if(phoneCandidateFrames>=3&&time-phoneSeenSince>=2400){
+    if(!phoneAlertActive){
+     recordEvent("phone","Possible driver phone use (YOLOX-Nano position and persistence heuristic)");
+     phoneAlertActive=true;phoneLastAlertAt=0;
+    }
+    if(time-phoneLastAlertAt>=REPEATED_ALERT_MS){alertPhone();phoneLastAlertAt=time;}
+    setText("phoneState","Possible phone use — warning");
+   }else setText("phoneState","Phone near driver — verifying ("+phoneCandidateFrames+"/3)");
+  }else{
+   phoneMissFrames++;
+   if(phoneMissFrames>=2){
+    resetPhoneCandidate();
+    setText("phoneState",detections.length?"Phone detected outside driver zone":"No likely phone use detected");
+   }else setText("phoneState","Checking — one missed detection tolerated");
+  }
+ }catch(e){
+  console.error("YOLOX-Nano inference failed:",e);
+  setText("phoneState","Detection error: "+(e&&e.message||String(e)));
+  phoneEnabled=false;phoneModel=null;$("phoneEnable").disabled=false;
+ }
+ finally{phoneBusy=false;}
 }
 function phoneIsInDriverZone(item,faceBox,frameWidth,frameHeight){
  // Geometry is a weak proxy for use, so only consider phones plausibly near the
