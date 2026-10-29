@@ -44,7 +44,7 @@ function downloadFullReport(){
  downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
 }
 
-let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null;
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null,phoneCurrentScoreThreshold=.22;
 const REPEATED_ALERT_MS=4000;
 let yawnWarningActive=false,yawnLastAlertAt=0;
 function recordEvent(type,message){
@@ -147,6 +147,9 @@ async function detectPhonesWithYolo(){
   }
  }
  const meanLuminance=pixelCount?luminanceSum/pixelCount:128;
+ // Dark-frame-only sensitivity adjustment. The multi-frame alert gate below still applies.
+ const objectnessThreshold=meanLuminance<85?.07:meanLuminance<125?.09:.12;
+ phoneCurrentScoreThreshold=meanLuminance<55?.13:meanLuminance<85?.16:meanLuminance<125?.19:.22;
  const gamma=meanLuminance<45?.58:meanLuminance<70?.68:meanLuminance<95?.78:meanLuminance<125?.88:1;
  if(gamma<1){
   const lut=new Uint8Array(256);
@@ -173,9 +176,9 @@ async function detectPhonesWithYolo(){
  const candidates=[];
  for(let i=0;i<rows;i++){
   const off=i*cols,obj=data[off+4];
-  if(!Number.isFinite(obj)||obj<.12)continue;
+  if(!Number.isFinite(obj)||obj<objectnessThreshold)continue;
   const score=obj*data[off+4+1+67];
-  if(!Number.isFinite(score)||score<.22)continue;
+  if(!Number.isFinite(score)||score<phoneCurrentScoreThreshold)continue;
   const cx=data[off],cy=data[off+1],bw=data[off+2],bh=data[off+3];
   if(![cx,cy,bw,bh].every(Number.isFinite)||bw<=0||bh<=0)continue;
   let x1=(cx-bw/2-padX)/scale,y1=(cy-bh/2-padY)/scale;
@@ -196,8 +199,8 @@ async function scanPhone(time,faceResult){
   }
   const detections=await detectPhonesWithYolo();
   // A phone can be held low or at the edge of a selfie-camera frame. Do not discard a real phone detection solely because the face-relative zone heuristic rejects it; persistence across multiple scans remains required.
-  const inZone=detections.filter(item=>item.class==="cell phone"&&item.score>=.22&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
-  const allPhones=detections.filter(item=>item.class==="cell phone"&&item.score>=.22);
+  const inZone=detections.filter(item=>item.class==="cell phone"&&item.score>=phoneCurrentScoreThreshold&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  const allPhones=detections.filter(item=>item.class==="cell phone"&&item.score>=phoneCurrentScoreThreshold);
   const candidates=inZone.length?inZone:allPhones;
   if(candidates.length){
    phoneMissFrames=0;
