@@ -200,61 +200,6 @@ async function scanPhone(time,faceResult){
  }
  finally{phoneBusy=false;}
 }
-function phoneIsInDriverZone(item,faceBox,frameWidth,frameHeight){
- // Geometry is a weak proxy for use, so only consider phones plausibly near the
- // visible driver; a phone elsewhere in the cabin/background should not alert.
- const [x,y,w,h]=item.bbox;
- if(![x,y,w,h,frameWidth,frameHeight].every(Number.isFinite)||w<=0||h<=0)return false;
- const phoneCenterX=x+w/2,phoneCenterY=y+h/2;
- const faceCenterX=faceBox.x+faceBox.width/2;
- const minWidth=Math.max(faceBox.width*.14,frameWidth*.025);
- const minHeight=Math.max(faceBox.height*.14,frameHeight*.025);
- const plausibleShape=(w/h)>=.22&&(w/h)<=2.1;
- const nearDriverHorizontally=Math.abs(phoneCenterX-faceCenterX)<=Math.max(faceBox.width*2.0,frameWidth*.18);
- const inDriverVerticalBand=phoneCenterY>=faceBox.y-faceBox.height*.20&&phoneCenterY<=Math.min(frameHeight*.97,faceBox.y+faceBox.height*5.0);
- return w>=minWidth&&h>=minHeight&&plausibleShape&&nearDriverHorizontally&&inDriverVerticalBand;
-}
-function resetPhoneCandidate(){
- phoneSeenSince=null;phoneCandidateFrames=0;phoneMissFrames=0;phoneAlertActive=false;phoneLastAlertAt=0;
-}
-async function scanPhone(time,faceResult){
- if(!phoneEnabled||!phoneModel||phoneBusy||!stream||time-phoneLastAt<1500)return;
- phoneBusy=true;phoneLastAt=time;
- try{
-  // Require a visible single driver face before interpreting phone position.
-  const faceBox=faceResult&&faceResult.detection&&faceResult.detection.box;
-  if(!faceBox||!video.videoWidth||!video.videoHeight){
-   resetPhoneCandidate();setText("phoneState","Waiting for driver face");return;
-  }
-  const detections=await phoneModel.detect(video,10,.65);
-  const candidates=detections.filter(item=>item.class==="cell phone"&&item.score>=.70&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
-  if(candidates.length){
-   phoneMissFrames=0;
-   if(phoneSeenSince===null)phoneSeenSince=time;
-   phoneCandidateFrames++;
-   if(phoneCandidateFrames>=3&&time-phoneSeenSince>=2500){
-    if(!phoneAlertActive){
-     recordEvent("phone","Possible driver phone use (position and persistence heuristic)");
-     phoneAlertActive=true;phoneLastAlertAt=0;
-    }
-    if(time-phoneLastAlertAt>=REPEATED_ALERT_MS){alertPhone();phoneLastAlertAt=time;}
-    setText("phoneState","Possible phone use — warning");
-   }else{
-    setText("phoneState","Phone near driver — verifying ("+phoneCandidateFrames+"/3)");
-   }
-  }else{
-   phoneMissFrames++;
-   if(phoneMissFrames>=2){
-    resetPhoneCandidate();
-    const phoneVisibleElsewhere=detections.some(item=>item.class==="cell phone"&&item.score>=.70);
-    setText("phoneState",phoneVisibleElsewhere?"Phone visible outside driver zone":"No likely phone use detected");
-   }else{
-    setText("phoneState","Checking — one missed detection tolerated");
-   }
-  }
- }catch(e){setText("phoneState","Detection error: "+e.message);phoneEnabled=false;$("phoneEnable").disabled=false;}
- finally{phoneBusy=false;}
-}
 const metrics=new window.DriverFatigueMetrics();
 const gazeTracker=new window.DriverGazeTracker();
 let irisMesh=null,irisReady=false,lastIrisTime=0,irisPending=false,irisWarning=false,eyeTimer=null;
