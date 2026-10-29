@@ -148,8 +148,8 @@ async function detectPhonesWithYolo(){
  }
  const meanLuminance=pixelCount?luminanceSum/pixelCount:128;
  // Dark-frame-only sensitivity adjustment. The multi-frame alert gate below still applies.
- const objectnessThreshold=meanLuminance<85?.07:meanLuminance<125?.09:.12;
- phoneCurrentScoreThreshold=meanLuminance<55?.13:meanLuminance<85?.16:meanLuminance<125?.19:.22;
+ const objectnessThreshold=meanLuminance<55?.03:meanLuminance<85?.05:meanLuminance<125?.08:.12;
+ phoneCurrentScoreThreshold=meanLuminance<55?.12:meanLuminance<85?.16:meanLuminance<125?.19:.22;
  const gamma=meanLuminance<45?.58:meanLuminance<70?.68:meanLuminance<95?.78:meanLuminance<125?.88:1;
  if(gamma<1){
   const lut=new Uint8Array(256);
