@@ -134,7 +134,28 @@ async function detectPhonesWithYolo(){
  const padX=0,padY=0;
  ctx.fillStyle="rgb(114,114,114)";ctx.fillRect(0,0,416,416);
  ctx.drawImage(video,0,0,resizedWidth,resizedHeight);
- const rgba=ctx.getImageData(0,0,416,416).data;
+ const imageData=ctx.getImageData(0,0,416,416);
+ const rgba=imageData.data;
+ // Adaptive low-light enhancement: estimate brightness over the camera image,
+ // then gently lift dark frames before inference.
+ let luminanceSum=0,pixelCount=0;
+ for(let y=0;y<resizedHeight;y+=2){
+  for(let x=0;x<resizedWidth;x+=2){
+   const p=(y*416+x)*4;
+   luminanceSum+=.2126*rgba[p]+.7152*rgba[p+1]+.0722*rgba[p+2];
+   pixelCount++;
+  }
+ }
+ const meanLuminance=pixelCount?luminanceSum/pixelCount:128;
+ const gamma=meanLuminance<45?.58:meanLuminance<70?.68:meanLuminance<95?.78:meanLuminance<125?.88:1;
+ if(gamma<1){
+  const lut=new Uint8Array(256);
+  for(let v=0;v<256;v++)lut[v]=Math.max(0,Math.min(255,Math.round(255*Math.pow(v/255,gamma))));
+  for(let i=0;i<rgba.length;i+=4){
+   rgba[i]=lut[rgba[i]];rgba[i+1]=lut[rgba[i+1]];rgba[i+2]=lut[rgba[i+2]];
+  }
+  ctx.putImageData(imageData,0,0);
+ }
  const plane=416*416,input=new Float32Array(plane*3);
  for(let i=0;i<plane;i++){
   input[i]=rgba[i*4];
