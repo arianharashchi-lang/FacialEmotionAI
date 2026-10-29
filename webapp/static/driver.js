@@ -174,7 +174,10 @@ async function scanPhone(time,faceResult){
    resetPhoneCandidate();setText("phoneState","Waiting for driver face");return;
   }
   const detections=await detectPhonesWithYolo();
-  const candidates=detections.filter(item=>item.class==="cell phone"&&item.score>=.25&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  // A phone can be held low or at the edge of a selfie-camera frame. Do not discard a real phone detection solely because the face-relative zone heuristic rejects it; persistence across multiple scans remains required.
+  const inZone=detections.filter(item=>item.class==="cell phone"&&item.score>=.25&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  const allPhones=detections.filter(item=>item.class==="cell phone"&&item.score>=.25);
+  const candidates=inZone.length?inZone:allPhones;
   if(candidates.length){
    phoneMissFrames=0;
    if(phoneSeenSince===null)phoneSeenSince=time;
@@ -191,7 +194,7 @@ async function scanPhone(time,faceResult){
    phoneMissFrames++;
    if(phoneMissFrames>=2){
     resetPhoneCandidate();
-    setText("phoneState",detections.length?"Phone detected outside driver zone":"No likely phone use detected");
+    setText("phoneState",allPhones.length&&!inZone.length?"Phone detected — verifying outside driver zone":detections.length?"Phone detected outside driver zone":"No likely phone use detected");
    }else setText("phoneState","Checking — one missed detection tolerated");
   }
  }catch(e){
