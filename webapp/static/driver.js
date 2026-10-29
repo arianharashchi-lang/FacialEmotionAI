@@ -152,9 +152,9 @@ async function detectPhonesWithYolo(){
  const candidates=[];
  for(let i=0;i<rows;i++){
   const off=i*cols,obj=data[off+4];
-  if(!Number.isFinite(obj)||obj<.15)continue;
+  if(!Number.isFinite(obj)||obj<.12)continue;
   const score=obj*data[off+4+1+67];
-  if(!Number.isFinite(score)||score<.25)continue;
+  if(!Number.isFinite(score)||score<.22)continue;
   const cx=data[off],cy=data[off+1],bw=data[off+2],bh=data[off+3];
   if(![cx,cy,bw,bh].every(Number.isFinite)||bw<=0||bh<=0)continue;
   let x1=(cx-bw/2-padX)/scale,y1=(cy-bh/2-padY)/scale;
@@ -175,8 +175,8 @@ async function scanPhone(time,faceResult){
   }
   const detections=await detectPhonesWithYolo();
   // A phone can be held low or at the edge of a selfie-camera frame. Do not discard a real phone detection solely because the face-relative zone heuristic rejects it; persistence across multiple scans remains required.
-  const inZone=detections.filter(item=>item.class==="cell phone"&&item.score>=.25&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
-  const allPhones=detections.filter(item=>item.class==="cell phone"&&item.score>=.25);
+  const inZone=detections.filter(item=>item.class==="cell phone"&&item.score>=.22&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  const allPhones=detections.filter(item=>item.class==="cell phone"&&item.score>=.22);
   const candidates=inZone.length?inZone:allPhones;
   if(candidates.length){
    phoneMissFrames=0;
