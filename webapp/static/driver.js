@@ -44,7 +44,7 @@ function downloadFullReport(){
  downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
 }
 
-let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null,phoneCurrentScoreThreshold=.22,phoneDebugInfo={meanLuminance:128,bestScore:0,bestObjectness:0,threshold:.22};
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null,phoneCurrentScoreThreshold=.22,phoneDebugInfo={meanLuminance:128,bestScore:0,bestObjectness:0,threshold:.22,objectnessThreshold:.12};
 const REPEATED_ALERT_MS=4000;
 let yawnWarningActive=false,yawnLastAlertAt=0;
 function recordEvent(type,message){
@@ -189,7 +189,7 @@ async function detectPhonesWithYolo(){
   x2=Math.max(0,Math.min(width,x2));y2=Math.max(0,Math.min(height,y2));
   if(x2>x1&&y2>y1)candidates.push({class:"cell phone",score,bbox:[x1,y1,x2-x1,y2-y1]});
  }
- phoneDebugInfo={meanLuminance:Math.round(meanLuminance),bestScore:Number(bestScore.toFixed(3)),bestObjectness:Number(bestObjectness.toFixed(3)),threshold:phoneCurrentScoreThreshold};
+ phoneDebugInfo={meanLuminance:Math.round(meanLuminance),bestScore:Number(bestScore.toFixed(3)),bestObjectness:Number(bestObjectness.toFixed(3)),threshold:phoneCurrentScoreThreshold,objectnessThreshold};
  return phoneNms(candidates).slice(0,10);
 }
 async function scanPhone(time,faceResult){
@@ -221,7 +221,7 @@ async function scanPhone(time,faceResult){
    phoneMissFrames++;
    if(phoneMissFrames>=2){
     resetPhoneCandidate();
-    setText("phoneState",allPhones.length&&!inZone.length?"Phone detected — verifying outside driver zone":detections.length?"Phone detected outside driver zone":"No likely phone use detected (light "+phoneDebugInfo.meanLuminance+", score "+phoneDebugInfo.bestScore+", threshold "+phoneDebugInfo.threshold+")");
+    setText("phoneState",allPhones.length&&!inZone.length?"Phone detected — verifying outside driver zone":detections.length?"Phone detected outside driver zone":"No likely phone use detected (light "+phoneDebugInfo.meanLuminance+", score "+phoneDebugInfo.bestScore+"/"+phoneDebugInfo.threshold+", objectness "+phoneDebugInfo.bestObjectness+"/"+phoneDebugInfo.objectnessThreshold+")");
    }else setText("phoneState","Checking — one missed detection tolerated");
   }
  }catch(e){
