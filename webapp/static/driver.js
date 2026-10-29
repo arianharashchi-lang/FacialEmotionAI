@@ -98,11 +98,11 @@ function phoneIsInDriverZone(item,faceBox,frameWidth,frameHeight){
  if(![x,y,w,h,frameWidth,frameHeight].every(Number.isFinite)||w<=0||h<=0)return false;
  const phoneCenterX=x+w/2,phoneCenterY=y+h/2;
  const faceCenterX=faceBox.x+faceBox.width/2;
- const minWidth=Math.max(faceBox.width*.14,frameWidth*.025);
- const minHeight=Math.max(faceBox.height*.14,frameHeight*.025);
- const plausibleShape=(w/h)>=.22&&(w/h)<=2.1;
- const nearDriverHorizontally=Math.abs(phoneCenterX-faceCenterX)<=Math.max(faceBox.width*2.0,frameWidth*.18);
- const inDriverVerticalBand=phoneCenterY>=faceBox.y-faceBox.height*.20&&phoneCenterY<=Math.min(frameHeight*.97,faceBox.y+faceBox.height*5.0);
+ const minWidth=Math.max(faceBox.width*.08,frameWidth*.015);
+ const minHeight=Math.max(faceBox.height*.08,frameHeight*.015);
+ const plausibleShape=(w/h)>=.15&&(w/h)<=2.5;
+ const nearDriverHorizontally=Math.abs(phoneCenterX-faceCenterX)<=Math.max(faceBox.width*2.8,frameWidth*.28);
+ const inDriverVerticalBand=phoneCenterY>=faceBox.y-faceBox.height*.35&&phoneCenterY<=Math.min(frameHeight*.99,faceBox.y+faceBox.height*6.5);
  return w>=minWidth&&h>=minHeight&&plausibleShape&&nearDriverHorizontally&&inDriverVerticalBand;
 }
 function resetPhoneCandidate(){
@@ -130,9 +130,10 @@ async function detectPhonesWithYolo(){
  const ctx=phoneCanvas.getContext("2d",{willReadFrequently:true});
  const scale=Math.min(416/width,416/height);
  const resizedWidth=Math.round(width*scale),resizedHeight=Math.round(height*scale);
- const padX=Math.floor((416-resizedWidth)/2),padY=Math.floor((416-resizedHeight)/2);
+ // Match the standard YOLOX ONNX letterbox: preserve aspect ratio and pad only on the right/bottom.
+ const padX=0,padY=0;
  ctx.fillStyle="rgb(114,114,114)";ctx.fillRect(0,0,416,416);
- ctx.drawImage(video,padX,padY,resizedWidth,resizedHeight);
+ ctx.drawImage(video,0,0,resizedWidth,resizedHeight);
  const rgba=ctx.getImageData(0,0,416,416).data;
  const plane=416*416,input=new Float32Array(plane*3);
  for(let i=0;i<plane;i++){
@@ -151,9 +152,9 @@ async function detectPhonesWithYolo(){
  const candidates=[];
  for(let i=0;i<rows;i++){
   const off=i*cols,obj=data[off+4];
-  if(!Number.isFinite(obj)||obj<.20)continue;
+  if(!Number.isFinite(obj)||obj<.15)continue;
   const score=obj*data[off+4+1+67];
-  if(!Number.isFinite(score)||score<.35)continue;
+  if(!Number.isFinite(score)||score<.25)continue;
   const cx=data[off],cy=data[off+1],bw=data[off+2],bh=data[off+3];
   if(![cx,cy,bw,bh].every(Number.isFinite)||bw<=0||bh<=0)continue;
   let x1=(cx-bw/2-padX)/scale,y1=(cy-bh/2-padY)/scale;
@@ -173,7 +174,7 @@ async function scanPhone(time,faceResult){
    resetPhoneCandidate();setText("phoneState","Waiting for driver face");return;
   }
   const detections=await detectPhonesWithYolo();
-  const candidates=detections.filter(item=>item.class==="cell phone"&&item.score>=.35&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
+  const candidates=detections.filter(item=>item.class==="cell phone"&&item.score>=.25&&phoneIsInDriverZone(item,faceBox,video.videoWidth,video.videoHeight));
   if(candidates.length){
    phoneMissFrames=0;
    if(phoneSeenSince===null)phoneSeenSince=time;
