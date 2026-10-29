@@ -44,7 +44,7 @@ function downloadFullReport(){
  downloadLocal("facialemotionai-driver-report.html",new Blob([markup],{type:"text/html;charset=utf-8"}));
 }
 
-let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null,phoneCurrentScoreThreshold=.22;
+let phoneModel=null,phoneEnabled=false,phoneBusy=false,phoneLastAt=0,phoneSeenSince=null,phoneCandidateFrames=0,phoneMissFrames=0,phoneAlertActive=false,phoneLastAlertAt=0,phoneCanvas=null,phoneCurrentScoreThreshold=.22,phoneDebugInfo={meanLuminance:128,bestScore:0,bestObjectness:0,threshold:.22};
 const REPEATED_ALERT_MS=4000;
 let yawnWarningActive=false,yawnLastAlertAt=0;
 function recordEvent(type,message){
@@ -174,11 +174,13 @@ async function detectPhonesWithYolo(){
  const rows=dims[dims.length-2],cols=dims[dims.length-1];
  if(cols<85||rows<1)throw Error("Unexpected YOLOX-Nano output shape: "+dims.join("x"));
  const candidates=[];
+ let bestScore=0,bestObjectness=0;
  for(let i=0;i<rows;i++){
   const off=i*cols,obj=data[off+4];
-  if(!Number.isFinite(obj)||obj<objectnessThreshold)continue;
+  if(!Number.isFinite(obj))continue;
   const score=obj*data[off+4+1+67];
-  if(!Number.isFinite(score)||score<phoneCurrentScoreThreshold)continue;
+  if(Number.isFinite(score)&&score>bestScore){bestScore=score;bestObjectness=obj;}
+  if(obj<objectnessThreshold||!Number.isFinite(score)||score<phoneCurrentScoreThreshold)continue;
   const cx=data[off],cy=data[off+1],bw=data[off+2],bh=data[off+3];
   if(![cx,cy,bw,bh].every(Number.isFinite)||bw<=0||bh<=0)continue;
   let x1=(cx-bw/2-padX)/scale,y1=(cy-bh/2-padY)/scale;
@@ -187,6 +189,7 @@ async function detectPhonesWithYolo(){
   x2=Math.max(0,Math.min(width,x2));y2=Math.max(0,Math.min(height,y2));
   if(x2>x1&&y2>y1)candidates.push({class:"cell phone",score,bbox:[x1,y1,x2-x1,y2-y1]});
  }
+ phoneDebugInfo={meanLuminance:Math.round(meanLuminance),bestScore:Number(bestScore.toFixed(3)),bestObjectness:Number(bestObjectness.toFixed(3)),threshold:phoneCurrentScoreThreshold};
  return phoneNms(candidates).slice(0,10);
 }
 async function scanPhone(time,faceResult){
@@ -218,7 +221,7 @@ async function scanPhone(time,faceResult){
    phoneMissFrames++;
    if(phoneMissFrames>=2){
     resetPhoneCandidate();
-    setText("phoneState",allPhones.length&&!inZone.length?"Phone detected — verifying outside driver zone":detections.length?"Phone detected outside driver zone":"No likely phone use detected");
+    setText("phoneState",allPhones.length&&!inZone.length?"Phone detected — verifying outside driver zone":detections.length?"Phone detected outside driver zone":"No likely phone use detected (light "+phoneDebugInfo.meanLuminance+", score "+phoneDebugInfo.bestScore+", threshold "+phoneDebugInfo.threshold+")");
    }else setText("phoneState","Checking — one missed detection tolerated");
   }
  }catch(e){
