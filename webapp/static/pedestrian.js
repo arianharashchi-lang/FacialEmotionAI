@@ -4,7 +4,7 @@
  const video=$("camera"),canvas=$("pedestrianOverlay"),button=$("pedestrianEnable");
  if(!video||!canvas||!button)return;
  const ctx=canvas.getContext("2d");
- let session=null,enabled=false,busy=false,lastRun=0,nextTrackId=1,tracks=[];
+ let session=null,enabled=false,busy=false,lastRun=0,nextTrackId=1,tracks=[],zoneHits=0;
  const MODEL="https://cdn.jsdelivr.net/gh/arianharashchi-lang/FacialEmotionAI@2da84cd/webapp/static/models/yolov8n.onnx",SIZE=640,HIGH_CONF=.45,LOW_CONF=.10,IOU=.45,TRACK_IOU=.25,MAX_MISSED=8;
  function status(s){$("pedestrianState").textContent=s;}
  function resizeCanvas(){const w=video.videoWidth||640,h=video.videoHeight||480;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
@@ -63,6 +63,13 @@
  }
  function draw(boxes){
   resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);
+  const zx=canvas.width*.30,zy=canvas.height*.30,zw=canvas.width*.40,zh=canvas.height*.55;
+  ctx.save();ctx.setLineDash([9,6]);ctx.lineWidth=3;ctx.strokeStyle="#ffbf47";ctx.strokeRect(zx,zy,zw,zh);ctx.setLineDash([]);ctx.fillStyle="#ffbf47";ctx.font="bold 14px sans-serif";ctx.fillText("TEST ZONE",zx+8,zy+20);ctx.restore();
+  const inZone=boxes.some(t=>{const b=t.box,px=(b.x1+b.x2)/2,py=b.y2;return px>=zx&&px<=zx+zw&&py>=zy&&py<=zy+zh;});
+  zoneHits=inZone?zoneHits+1:0;
+  const zoneAlert=zoneHits>=2;
+  const zoneState=$("pedestrianZoneState");
+  if(zoneState)zoneState.textContent=zoneAlert?"Person in test zone":"Clear";
   for(const t of boxes){const b=t.box;ctx.strokeStyle="#36e6a0";ctx.lineWidth=Math.max(2,canvas.width/400);ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);ctx.fillStyle="#36e6a0";ctx.font="bold 15px sans-serif";ctx.fillText("ID "+t.id+" · "+Math.round(t.score*100)+"%",b.x1,Math.max(18,b.y1-6));}
   $("pedestrianCount").textContent=String(boxes.length);
  }
