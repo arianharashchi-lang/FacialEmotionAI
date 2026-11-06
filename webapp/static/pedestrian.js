@@ -4,8 +4,8 @@
  const video=$("camera"),canvas=$("pedestrianOverlay"),button=$("pedestrianEnable");
  if(!video||!canvas||!button)return;
  const ctx=canvas.getContext("2d");
- let session=null,enabled=false,busy=false,lastRun=0;
- const MODEL="https://cdn.jsdelivr.net/gh/arianharashchi-lang/FacialEmotionAI@2da84cd/webapp/static/models/yolov8n.onnx",SIZE=640,CONF=.45,IOU=.45;
+ let session=null,enabled=false,busy=false,lastRun=0,nextTrackId=1,tracks=[];
+ const MODEL="https://cdn.jsdelivr.net/gh/arianharashchi-lang/FacialEmotionAI@2da84cd/webapp/static/models/yolov8n.onnx",SIZE=640,HIGH_CONF=.45,LOW_CONF=.10,IOU=.45,TRACK_IOU=.25,MAX_MISSED=8;
  function status(s){$("pedestrianState").textContent=s;}
  function resizeCanvas(){const w=video.videoWidth||640,h=video.videoHeight||480;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
  function makeInput(){
@@ -21,7 +21,7 @@
  function decode(data,meta){
   const n=8400,found=[];
   for(let i=0;i<n;i++){
-   const score=data[4*n+i];if(score<CONF)continue;
+   const score=data[4*n+i];if(score<LOW_CONF)continue;
    const cx=data[i],cy=data[n+i],w=data[2*n+i],h=data[3*n+i];
    let x1=(cx-w/2-meta.px)/meta.scale,y1=(cy-h/2-meta.py)/meta.scale;
    let x2=(cx+w/2-meta.px)/meta.scale,y2=(cy+h/2-meta.py)/meta.scale;
@@ -32,15 +32,44 @@
   for(const box of found){if(kept.every(k=>iou(k,box)<IOU))kept.push(box);if(kept.length>=30)break;}
   return kept;
  }
+ function updateTracks(detections){
+  const high=detections.filter(d=>d.score>=HIGH_CONF);
+  const low=detections.filter(d=>d.score< HIGH_CONF);
+  const matchedTracks=new Set(),matchedHigh=new Set();
+  function associate(candidates){
+   const pairs=[];
+   for(let ti=0;ti<tracks.length;ti++){
+    if(matchedTracks.has(ti))continue;
+    for(let di=0;di<candidates.length;di++){
+     if(candidates[di]._used)continue;
+     const overlap=iou(tracks[ti].box,candidates[di]);
+     if(overlap>=TRACK_IOU)pairs.push({ti,di,overlap});
+    }
+   }
+   pairs.sort((a,b)=>b.overlap-a.overlap);
+   for(const p of pairs){
+    if(matchedTracks.has(p.ti)||candidates[p.di]._used)continue;
+    const t=tracks[p.ti],d=candidates[p.di];
+    t.box={x1:.35*t.box.x1+.65*d.x1,y1:.35*t.box.y1+.65*d.y1,x2:.35*t.box.x2+.65*d.x2,y2:.35*t.box.y2+.65*d.y2};
+    t.score=d.score;t.hits++;t.missed=0;t.age++;matchedTracks.add(p.ti);candidates[p.di]._used=true;
+   }
+  }
+  associate(high);
+  associate(low);
+  tracks.forEach((t,i)=>{if(!matchedTracks.has(i)){t.missed++;t.age++;}});
+  tracks=tracks.filter(t=>t.missed<=MAX_MISSED);
+  high.forEach(d=>{if(!d._used)tracks.push({id:nextTrackId++,box:{x1:d.x1,y1:d.y1,x2:d.x2,y2:d.y2},score:d.score,hits:1,missed:0,age:1});});
+  return tracks.filter(t=>t.missed===0);
+ }
  function draw(boxes){
   resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(const b of boxes){ctx.strokeStyle="#36e6a0";ctx.lineWidth=Math.max(2,canvas.width/400);ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);ctx.fillStyle="#36e6a0";ctx.font="bold 15px sans-serif";ctx.fillText("Person "+Math.round(b.score*100)+"%",b.x1,Math.max(18,b.y1-6));}
+  for(const t of boxes){const b=t.box;ctx.strokeStyle="#36e6a0";ctx.lineWidth=Math.max(2,canvas.width/400);ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);ctx.fillStyle="#36e6a0";ctx.font="bold 15px sans-serif";ctx.fillText("ID "+t.id+" · "+Math.round(t.score*100)+"%",b.x1,Math.max(18,b.y1-6));}
   $("pedestrianCount").textContent=String(boxes.length);
  }
  async function scan(){
   if(!enabled||busy||!session||video.readyState<2||performance.now()-lastRun<500)return;
   busy=true;lastRun=performance.now();
-  try{const meta=makeInput();const out=await session.run({images:meta.tensor});const boxes=decode(out[session.outputNames[0]].data,meta);draw(boxes);status("Active — experimental");}
+  try{const meta=makeInput();const out=await session.run({images:meta.tensor});const detections=decode(out[session.outputNames[0]].data,meta);const boxes=updateTracks(detections);draw(boxes);status("Active — experimental");}
   catch(e){status("Inference error");console.error("Pedestrian detector:",e);enabled=false;button.disabled=false;}
   finally{busy=false;}
  }
