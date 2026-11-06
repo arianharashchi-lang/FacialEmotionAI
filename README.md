@@ -47,6 +47,32 @@
 - Final model artifacts stored with **Git LFS**.
 - Raw datasets, webcam captures, adaptation samples, and local databases are excluded from Git.
 
+## Driver Monitoring System
+
+The web application also includes an experimental browser-based **Driver Monitoring System (DMS)**. It uses the webcam to analyze facial cues and detect selected driver behaviors in real time. These features are separate from the core five-class emotion-recognition pipeline described above.
+
+### Driver monitoring features and methods
+
+| Feature | Method / technology | What it does |
+|---|---|---|
+| Driver face enrollment and verification | Face-api.js, Tiny Face Detector, 68 facial landmarks, face descriptor comparison, Euclidean distance | Enrolls a face and compares a later face sample with the stored descriptor. A PIN-based check is also available in the demo. |
+| Drowsiness cues | MediaPipe Face Mesh, Eye Aspect Ratio (EAR), adaptive eye-closure threshold, temporal analysis, PERCLOS-style rolling-window metric | Monitors eye closure over time and raises alerts when configured thresholds are reached. |
+| Head-turn / distraction cue | Facial landmark geometry and temporal thresholding with hysteresis | Estimates left/right head movement from facial landmarks and checks whether it persists. |
+| Gaze direction cue | MediaPipe Face Mesh with refined iris landmarks; normalized iris position | Estimates relative left, center, or right gaze from iris position. It is not calibrated to the road direction. |
+| Yawning cue | Face-api.js mouth landmarks and mouth aspect ratio | Flags sustained mouth opening as a possible yawn. |
+| Phone detection | TensorFlow.js with COCO-SSD (Lite MobileNetV2 backbone) | Detects the cell phone object class in camera frames. Object detection alone does not prove that the driver is using the phone. |
+| Pedestrian detection | YOLOv8n exported to ONNX, ONNX Runtime Web with WASM | Detects the COCO person class in the browser. |
+| Pedestrian tracking | Custom IoU-based association, confidence filtering, and Non-Maximum Suppression (NMS) | Associates detections across frames and displays temporary track IDs. This is a lightweight custom tracker, not the official ByteTrack implementation. |
+| Virtual pedestrian-zone alert | Canvas polygon rendering, point-in-polygon test, consecutive-scan confirmation, Web Speech API | Displays a perspective-style virtual ground zone and speaks “Stop! Stop!” while a detected person's lower bounding-box point remains inside it. |
+
+### Important implementation notes
+
+- Most live driver-monitoring inference runs in the browser using JavaScript and browser ML libraries. Pedestrian detection uses the YOLOv8n ONNX model through ONNX Runtime Web/WASM.
+- The pedestrian-zone polygon is a **virtual region in the camera image**. It is not a calibrated representation of the vehicle's real front/rear path or physical ground plane.
+- The current pedestrian-zone logic does **not** measure a person's real-world distance in meters and does not implement a verified 10-meter warning boundary.
+- The current demo does not establish automotive-grade reliability, road-direction gaze calibration, or integration with a vehicle's ECU, brakes, ignition, or other control systems.
+- Camera placement, lighting, occlusion, and browser performance can affect results. This DMS is an experimental portfolio demonstration, not a certified driver-safety system.
+
 ## Multilingual Web Interface
 
 The hosted web demo includes a language selector with **12 interface languages**:
