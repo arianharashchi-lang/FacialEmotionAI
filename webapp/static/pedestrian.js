@@ -86,13 +86,17 @@
   resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);
   // Perspective floor zone: narrow at the horizon, wider near the camera.
   const zone=[
-   {x:canvas.width*.39,y:canvas.height*.55},
-   {x:canvas.width*.61,y:canvas.height*.55},
-   {x:canvas.width*.91,y:canvas.height*.97},
-   {x:canvas.width*.09,y:canvas.height*.97}
+   {x:canvas.width*.42,y:canvas.height*.39},
+   {x:canvas.width*.58,y:canvas.height*.39},
+   {x:canvas.width*.96,y:canvas.height*.99},
+   {x:canvas.width*.04,y:canvas.height*.99}
   ];
   ctx.save();ctx.beginPath();ctx.moveTo(zone[0].x,zone[0].y);zone.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
-  ctx.fillStyle="rgba(255,191,71,.18)";ctx.fill();ctx.setLineDash([10,7]);ctx.lineWidth=3;ctx.strokeStyle="#ffbf47";ctx.stroke();ctx.setLineDash([]);
+  const groundFill=ctx.createLinearGradient(0,canvas.height*.39,0,canvas.height);
+  groundFill.addColorStop(0,"rgba(255,191,71,.10)");groundFill.addColorStop(1,"rgba(255,191,71,.30)");
+  ctx.fillStyle=groundFill;ctx.fill();ctx.setLineDash([]);ctx.lineWidth=4;ctx.strokeStyle="#ffbf47";ctx.stroke();
+  ctx.beginPath();ctx.moveTo(zone[0].x,zone[0].y);ctx.lineTo(zone[3].x,zone[3].y);ctx.moveTo(zone[1].x,zone[1].y);ctx.lineTo(zone[2].x,zone[2].y);
+  ctx.lineWidth=2;ctx.strokeStyle="rgba(255,224,150,.85)";ctx.stroke();
   ctx.fillStyle="#ffbf47";ctx.font="bold 14px sans-serif";ctx.fillText("GROUND TEST ZONE",zone[0].x+8,zone[0].y-8);ctx.restore();
   function pointInZone(x,y){
    let inside=false;
