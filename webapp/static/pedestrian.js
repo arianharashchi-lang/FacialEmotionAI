@@ -5,7 +5,7 @@
  if(!video||!canvas||!button)return;
  const ctx=canvas.getContext("2d");
  let session=null,enabled=false,busy=false,lastRun=0;
- const MODEL="/static/models/yolov8n.onnx",SIZE=640,CONF=.45,IOU=.45;
+ const MODEL="https://cdn.jsdelivr.net/gh/arianharashchi-lang/FacialEmotionAI@2da84cd/webapp/static/models/yolov8n.onnx",SIZE=640,CONF=.45,IOU=.45;
  function status(s){$("pedestrianState").textContent=s;}
  function resizeCanvas(){const w=video.videoWidth||640,h=video.videoHeight||480;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
  function makeInput(){
