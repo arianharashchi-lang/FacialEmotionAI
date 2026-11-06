@@ -84,9 +84,25 @@
  }
  function draw(boxes){
   resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);
-  const zx=canvas.width*.30,zy=canvas.height*.30,zw=canvas.width*.40,zh=canvas.height*.55;
-  ctx.save();ctx.setLineDash([9,6]);ctx.lineWidth=3;ctx.strokeStyle="#ffbf47";ctx.strokeRect(zx,zy,zw,zh);ctx.setLineDash([]);ctx.fillStyle="#ffbf47";ctx.font="bold 14px sans-serif";ctx.fillText("TEST ZONE",zx+8,zy+20);ctx.restore();
-  const inZone=boxes.some(t=>{const b=t.box,px=(b.x1+b.x2)/2,py=b.y2;return px>=zx&&px<=zx+zw&&py>=zy&&py<=zy+zh;});
+  // Perspective floor zone: narrow at the horizon, wider near the camera.
+  const zone=[
+   {x:canvas.width*.39,y:canvas.height*.55},
+   {x:canvas.width*.61,y:canvas.height*.55},
+   {x:canvas.width*.91,y:canvas.height*.97},
+   {x:canvas.width*.09,y:canvas.height*.97}
+  ];
+  ctx.save();ctx.beginPath();ctx.moveTo(zone[0].x,zone[0].y);zone.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.closePath();
+  ctx.fillStyle="rgba(255,191,71,.18)";ctx.fill();ctx.setLineDash([10,7]);ctx.lineWidth=3;ctx.strokeStyle="#ffbf47";ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle="#ffbf47";ctx.font="bold 14px sans-serif";ctx.fillText("GROUND TEST ZONE",zone[0].x+8,zone[0].y-8);ctx.restore();
+  function pointInZone(x,y){
+   let inside=false;
+   for(let i=0,j=zone.length-1;i<zone.length;j=i++){
+    const a=zone[i],b=zone[j];
+    if(((a.y>y)!==(b.y>y))&&(x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x))inside=!inside;
+   }
+   return inside;
+  }
+  const inZone=boxes.some(t=>{const b=t.box,px=(b.x1+b.x2)/2,py=b.y2;return pointInZone(px,py);});
   zoneHits=inZone?zoneHits+1:0;
   const zoneAlert=zoneHits>=2;
   const zoneState=$("pedestrianZoneState");
