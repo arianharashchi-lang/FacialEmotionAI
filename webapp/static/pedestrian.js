@@ -4,7 +4,7 @@
  const video=$("camera"),canvas=$("pedestrianOverlay"),button=$("pedestrianEnable");
  if(!video||!canvas||!button)return;
  const ctx=canvas.getContext("2d");
- let session=null,enabled=false,busy=false,lastRun=0,nextTrackId=1,tracks=[],zoneHits=0;
+ let session=null,enabled=false,busy=false,lastRun=0,nextTrackId=1,tracks=[],zoneHits=0,alarmTimer=null,alarmActive=false,speechBusy=false;
  const MODEL="https://cdn.jsdelivr.net/gh/arianharashchi-lang/FacialEmotionAI@2da84cd/webapp/static/models/yolov8n.onnx",SIZE=640,HIGH_CONF=.45,LOW_CONF=.10,IOU=.45,TRACK_IOU=.25,MAX_MISSED=8;
  function status(s){$("pedestrianState").textContent=s;}
  function resizeCanvas(){const w=video.videoWidth||640,h=video.videoHeight||480;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
@@ -61,6 +61,27 @@
   high.forEach(d=>{if(!d._used)tracks.push({id:nextTrackId++,box:{x1:d.x1,y1:d.y1,x2:d.x2,y2:d.y2},score:d.score,hits:1,missed:0,age:1});});
   return tracks.filter(t=>t.missed===0);
  }
+ function speakStop(){
+  if(!alarmActive||speechBusy||!window.speechSynthesis)return;
+  speechBusy=true;
+  const utterance=new SpeechSynthesisUtterance("Stop! Stop!");
+  utterance.lang="en-US";utterance.rate=0.9;utterance.pitch=1;
+  utterance.onend=()=>{speechBusy=false;};
+  utterance.onerror=()=>{speechBusy=false;};
+  window.speechSynthesis.speak(utterance);
+ }
+ function setZoneAlarm(active){
+  if(active&&!alarmActive){
+   alarmActive=true;
+   speakStop();
+   alarmTimer=setInterval(speakStop,1700);
+  }else if(!active&&alarmActive){
+   alarmActive=false;
+   if(alarmTimer){clearInterval(alarmTimer);alarmTimer=null;}
+   if(window.speechSynthesis)window.speechSynthesis.cancel();
+   speechBusy=false;
+  }
+ }
  function draw(boxes){
   resizeCanvas();ctx.clearRect(0,0,canvas.width,canvas.height);
   const zx=canvas.width*.30,zy=canvas.height*.30,zw=canvas.width*.40,zh=canvas.height*.55;
@@ -69,7 +90,8 @@
   zoneHits=inZone?zoneHits+1:0;
   const zoneAlert=zoneHits>=2;
   const zoneState=$("pedestrianZoneState");
-  if(zoneState)zoneState.textContent=zoneAlert?"Person in test zone":"Clear";
+  if(zoneState)zoneState.textContent=zoneAlert?"STOP! Person in test zone":"Clear";
+  setZoneAlarm(zoneAlert);
   for(const t of boxes){const b=t.box;ctx.strokeStyle="#36e6a0";ctx.lineWidth=Math.max(2,canvas.width/400);ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);ctx.fillStyle="#36e6a0";ctx.font="bold 15px sans-serif";ctx.fillText("ID "+t.id+" · "+Math.round(t.score*100)+"%",b.x1,Math.max(18,b.y1-6));}
   $("pedestrianCount").textContent=String(boxes.length);
  }
@@ -93,5 +115,5 @@
   }catch(e){status("Model load failed");button.disabled=false;console.error(e);}
  }
  button.addEventListener("click",enable);
- window.addEventListener("pagehide",()=>{enabled=false;if(session)session.release();});
+ window.addEventListener("pagehide",()=>{enabled=false;setZoneAlarm(false);if(session)session.release();});
 })();
