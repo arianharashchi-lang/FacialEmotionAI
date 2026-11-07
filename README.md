@@ -8,6 +8,10 @@ An experimental browser-based dashboard for exploring what a single camera can t
 
 ### 3D project teaser
 
+[▶ Watch the 3D Didban project teaser](assets/didban-3d.mp4)
+
+> **Video upload required:** Add `didban-3d.mp4` to the `assets/` folder for the link above to work.
+
 The 39-second Didban teaser shows three scenarios.
 
 - **0:04–0:09 and 0:09–0:14** — A cargo robot detects a pedestrian and stops, first while moving forward and then while reversing. The video shows the robot’s camera feed alongside an external view.
