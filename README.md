@@ -2,6 +2,8 @@
 
 An experimental browser-based dashboard for exploring what a single camera can tell us about a driver. The dashboard tracks eye closure, head turns, mouth opening and relative gaze over time. Two optional detectors look for phones and people in the same camera view. FastAPI serves the dashboard at `/driver`, and JavaScript processes the camera frames in the browser.
 
+[معرفی فارسی DIDBAN برای شرکت‌های صنعتی](docs/didban-iran.html) · [DIDBAN industrial pilot (English)](docs/didban-industrial-pilot.html)
+
 [Open the driver dashboard](https://facialemotionai-web.onrender.com/driver) · [Run locally](#run-the-driver-dashboard-locally) · [Architecture](#how-the-dashboard-works)
 
 ## Driver Monitoring and Pedestrian Detection for Vehicles and Robots
