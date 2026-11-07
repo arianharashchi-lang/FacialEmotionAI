@@ -348,8 +348,6 @@ Driver_-monitoring/
 │   ├── anti_spoofing/
 │   ├── adapter/
 │   └── experiments/
-├── archive/
-│   └── legacy_runtime/         # historical runtime prototypes
 ├── docs/
 │   ├── architecture.png
 │   └── screenshots/
