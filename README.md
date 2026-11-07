@@ -4,6 +4,45 @@ An experimental browser-based dashboard for exploring what a single camera can t
 
 [Open the driver dashboard](https://facialemotionai-web.onrender.com/driver) · [Run locally](#run-the-driver-dashboard-locally) · [Architecture](#how-the-dashboard-works)
 
+## Driver Monitoring and Pedestrian Detection for Vehicles and Robots
+
+### 3D project teaser
+
+The 39-second Didban teaser shows three scenarios.
+
+- **0:04–0:09 and 0:09–0:14** — A cargo robot detects a pedestrian and stops, first while moving forward and then while reversing. The video shows the robot’s camera feed alongside an external view.
+- **0:14–0:24** — As a truck moves forward and reverses, its in-cab monitor highlights the pedestrian and alerts the driver.
+- **0:24–0:36** — An in-cab camera detects signs of drowsiness and distraction, as well as a phone in the driver’s hand.
+
+### Industrial applications
+
+In factories and warehouses, operators and robots can use the system to monitor routes that workers share with moving equipment. For example, when a worker crosses an aisle beside a production line, the operator can see where the worker is in the camera view and which way they turn their head.
+
+The same pedestrian detection software can run on a cargo robot’s onboard computer. If the robot’s controller determines that a person is in its path, it can slow the robot down or issue a stop command. An operator can monitor the situation from the control room at the same time.
+
+#### In-cab display
+
+When a cargo vehicle reverses in a factory yard, its onboard computer can process the rear camera feed and draw a bounding box around each pedestrian on the in-cab display. If the system can determine which way a pedestrian turns their head, an arrow next to the box can show the driver the direction of the turn.
+
+#### Driver monitoring with an in-cab camera
+
+A driver-facing camera can detect three conditions and show a corresponding alert on the in-cab display.
+
+- **Drowsiness.** The driver’s eyes stay closed for an extended period, or their head repeatedly drops.
+- **Distraction.** The driver looks away from the road for an extended period while the vehicle is moving.
+- **Handheld phone use.** The camera can detect a phone in the driver’s hand. If the driver is holding the phone and looking at it, the system can issue a phone-use alert.
+
+### Using the system on a robot
+
+The system can detect pedestrians in the robot’s camera feed. The detections can support motion control and operator monitoring at the same time.
+
+- **Motion control.** Software running on the robot’s onboard computer can send the pedestrian’s position in the image to the motion controller. If the controller determines that the pedestrian is in the robot’s path, it can slow the robot down or issue a stop command.
+- **Operator monitoring.** The monitoring station can use detections sent by the robot to draw a bounding box around each pedestrian in the camera feed. The station can also receive the camera feed and run pedestrian detection locally.
+
+### Detecting which way a pedestrian turns their head
+
+After detecting a pedestrian, the software can compare their head orientation across consecutive frames to determine whether they turned their head and in which direction. This processing can run on the robot’s onboard computer or at the monitoring station. The display can show the direction of the turn beside that pedestrian’s bounding box.
+
 ## Try a monitoring session
 
 1. Open the dashboard on a phone over HTTPS, tap **Start camera**, and allow camera access. Face the camera in steady light and keep your eyes visible while the eye tracker estimates your open-eye baseline. The first session needs network access to load browser models.
