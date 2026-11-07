@@ -78,9 +78,43 @@ Open the [local driver dashboard](http://127.0.0.1:8000/driver) on the computer 
 
 ## FacialEmotionAI
 
-This repository also includes a facial-expression model that classifies 20-frame sequences into five expression categories. Its RAVDESS benchmarks measure expression classification accuracy. The driver dashboard uses the browser-based monitoring rules described above.
+**FacialEmotionAI** is an end-to-end **real-time facial emotion recognition** system for webcam video. It combines spoof screening, MobileNetV2 frame features, BiLSTM + Temporal Attention, and a five-class live runtime: **Angry, Happy, Surprise, Sad, Neutral**.
 
-[FacialEmotionAI guide, benchmarks and setup](docs/facial-emotion-ai.md)
+The webcam runtime screens each detected face with a Real/Fake discriminator. MobileNetV2 extracts a 256-dimensional feature vector per sampled frame, and the temporal model reads a rolling window of 20 frames. The live classifier combines Fear with Surprise and Disgust with Sad. An optional adapter refines Sad and Neutral predictions when its confidence reaches 70%.
+
+### Training, validation and test splits
+
+RAVDESS recordings are grouped by actor so that each person appears in one split. The temporal models classify video sequences. The CNN baseline classifies individual frames.
+
+| Split | RAVDESS actor IDs | Actors | Use |
+|---|---|---:|---|
+| Training | 01–16 | 16 | Fit model weights |
+| Validation | 17–20 | 4 | Monitor training and compare checkpoints |
+| Test | 21–24 | 4 | Evaluate expression predictions on unseen actors |
+
+### Expression recognition results
+
+Accuracy counts the fraction of correct predictions. Macro F1 gives each expression class equal weight. The V3 training log records both training and validation accuracy. The row below uses the epoch with the highest validation Macro F1.
+
+| Validation checkpoint | Training accuracy | Validation accuracy | Validation Macro F1 |
+|---|---:|---:|---:|
+| LSTM V3, first epoch | 48.02% | 49.03% | 46.90% |
+
+[Epoch-by-epoch training and validation log](results/experiments/v3/lstm_attention_v3_training.csv)
+
+| Model or deployment mode | Classes | Test accuracy | Test Macro F1 |
+|---|---:|---:|---:|
+| CNN baseline | 7 | 41.49% | 40.00% |
+| **LSTM V1 Rebuild** (selected backbone) | 7 | **45.91%** | **43.92%** |
+| LSTM V2 | 7 | 43.27% | 36.18% |
+| LSTM V3 | 7 | 44.23% | 41.95% |
+| LSTM V4 | 7 | 43.27% | 41.82% |
+| **Five-class fusion** | 5 | **52.64%** | **54.73%** |
+| Five-class fusion with Sad/Neutral adapter | 5 | 46.39% | 45.45% |
+
+The CNN test covers 4,160 frames. The temporal and fusion results cover 416 sequences. Merging classes changes the prediction task, and the same test actors were used in earlier model comparisons. These figures measure facial-expression classification. The driver dashboard’s fatigue and distraction cues use separate browser-based rules.
+
+[Open the expression demo](https://facialemotionai-web.onrender.com) · [Full evaluation and per-class scores](RESULTS.md) · [Architecture and setup](docs/facial-emotion-ai.md)
 
 ## Credits and license
 
