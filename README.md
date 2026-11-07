@@ -8,9 +8,7 @@ An experimental browser-based dashboard for exploring what a single camera can t
 
 ### 3D project teaser
 
-[▶ Watch the 3D Didban project teaser](assets/didban-3d.mp4)
-
-> **Video upload required:** Add `didban-3d.mp4` to the `assets/` folder for the link above to work.
+[▶ Watch the DIDBAN 3D demonstration on Aparat](https://aparat.com/v/rvcr253)
 
 The 39-second Didban teaser shows three scenarios.
 
